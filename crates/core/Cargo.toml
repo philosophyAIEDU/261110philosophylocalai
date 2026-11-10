@@ -1,0 +1,53 @@
+[package]
+name = "pla-core"
+description = "Philosophy Local AI — 핵심 로직 (UI/데스크톱 프레임워크 비의존)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+async-trait = "0.1"
+axum = { version = "0.7", optional = true }
+base64 = "0.22"
+calamine = { version = "0.26", features = ["dates"] }
+chacha20poly1305 = "0.10"
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+csv = "1"
+docx-rs = "0.4"
+encoding_rs = "0.8"
+flate2 = "1"
+futures-util = "0.3"
+hex = "0.4"
+pdf-extract = "0.7"
+quick-xml = "0.37"
+regex = "1"
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json", "stream"] }
+rusqlite = { version = "0.32", features = ["bundled"] }
+rust_xlsxwriter = "0.79"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+sysinfo = "0.33"
+tar = "0.4"
+thiserror = "2"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "process", "sync", "time", "fs", "io-util", "net"] }
+tokio-util = "0.7"
+url = "2"
+uuid = { version = "1", features = ["v4"] }
+zip = { version = "2", default-features = false, features = ["deflate"] }
+zstd = "0.13"
+
+[target.'cfg(any(target_os = "macos", target_os = "windows"))'.dependencies]
+keyring = { version = "3", features = ["apple-native", "windows-native"] }
+
+[dev-dependencies]
+tempfile = "3"
+
+[features]
+# 개발·테스트 전용 가짜 엔진(Ollama API 흉내). 배포 빌드에는 포함되지 않는다.
+fake-engine = ["dep:axum"]
+
+[[bin]]
+name = "pla-fake-engine"
+path = "src/bin/fake_engine.rs"
+required-features = ["fake-engine"]

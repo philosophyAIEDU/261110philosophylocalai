@@ -1,0 +1,15 @@
+[workspace]
+resolver = "2"
+members = ["crates/core"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+authors = ["Philosophy AI Education"]
+
+[profile.release]
+opt-level = "s"
+lto = "thin"
+strip = true
+codegen-units = 4

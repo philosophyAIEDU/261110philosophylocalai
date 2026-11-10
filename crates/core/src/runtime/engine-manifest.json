@@ -1,0 +1,14 @@
+{
+  "engine": "ollama",
+  "version": "0.40.16",
+  "source": "https://github.com/ollama/ollama/releases/tag/v0.40.16",
+  "license": "MIT",
+  "base_url": "https://github.com/ollama/ollama/releases/download/v0.40.16/",
+  "assets": {
+    "windows-x86_64": { "file": "ollama-windows-amd64.zip", "sha256": null, "binary": "ollama.exe" },
+    "windows-aarch64": { "file": "ollama-windows-arm64.zip", "sha256": null, "binary": "ollama.exe" },
+    "macos-universal": { "file": "ollama-darwin.tgz", "sha256": null, "binary": "ollama" },
+    "linux-x86_64": { "file": "ollama-linux-amd64.tar.zst", "sha256": null, "binary": "bin/ollama" },
+    "linux-aarch64": { "file": "ollama-linux-arm64.tar.zst", "sha256": null, "binary": "bin/ollama" }
+  }
+}

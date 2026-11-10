@@ -1,0 +1,62 @@
+{
+  "catalog_version": "2026-11-10",
+  "note": "모델 이름·태그·라이선스는 Ollama 공식 라이브러리(ollama.com/library) 기준. 크기는 기본 4비트 양자화(Q4_K_M) 태그의 근사값. 품질 점수(1~5)는 개발팀의 편집 추정치이며 벤치마크로 검증한 값이 아님.",
+  "models": [
+    {
+      "id": "gemma3:1b", "family": "Gemma 3", "publisher": "Google", "display_name": "Gemma 3 · 초경량",
+      "params_b": 1.0, "quantization": "Q4_K_M", "download_gb": 0.8, "est_ram_gb": 2.0, "context_k": 32,
+      "license": "Gemma Terms of Use", "license_url": "https://ai.google.dev/gemma/terms",
+      "korean": 2, "summarization": 2, "reasoning": 1, "thinking": false,
+      "description": "사양이 낮은 컴퓨터에서도 실행되는 가장 작은 모델입니다. 간단한 대화와 짧은 글 정리에 적합하며, 긴 문서 분석 품질은 제한적입니다."
+    },
+    {
+      "id": "gemma3:4b", "family": "Gemma 3", "publisher": "Google", "display_name": "Gemma 3 · 가벼움",
+      "params_b": 4.3, "quantization": "Q4_K_M", "download_gb": 3.3, "est_ram_gb": 4.5, "context_k": 128,
+      "license": "Gemma Terms of Use", "license_url": "https://ai.google.dev/gemma/terms",
+      "korean": 3, "summarization": 3, "reasoning": 2, "thinking": false,
+      "description": "빠르게 응답하는 가벼운 모델입니다. 일상적인 질문, 짧은 문서 요약, 문서 초안 작성에 적합합니다."
+    },
+    {
+      "id": "qwen3:4b", "family": "Qwen 3", "publisher": "Alibaba Cloud", "display_name": "Qwen 3 · 가벼움",
+      "params_b": 4.0, "quantization": "Q4_K_M", "download_gb": 2.6, "est_ram_gb": 4.0, "context_k": 40,
+      "license": "Apache-2.0", "license_url": "https://www.apache.org/licenses/LICENSE-2.0",
+      "korean": 3, "summarization": 3, "reasoning": 3, "thinking": true,
+      "description": "작지만 논리적인 정리에 강한 모델입니다. 자유로운 라이선스(Apache-2.0)로 제공됩니다."
+    },
+    {
+      "id": "qwen3:8b", "family": "Qwen 3", "publisher": "Alibaba Cloud", "display_name": "Qwen 3 · 균형",
+      "params_b": 8.2, "quantization": "Q4_K_M", "download_gb": 5.2, "est_ram_gb": 7.5, "context_k": 40,
+      "license": "Apache-2.0", "license_url": "https://www.apache.org/licenses/LICENSE-2.0",
+      "korean": 3, "summarization": 4, "reasoning": 4, "thinking": true,
+      "description": "속도와 품질의 균형이 좋은 모델입니다. 문서 요약, 보고서 초안, 자료 정리에 두루 쓸 수 있습니다."
+    },
+    {
+      "id": "gemma3:12b", "family": "Gemma 3", "publisher": "Google", "display_name": "Gemma 3 · 균형",
+      "params_b": 12.2, "quantization": "Q4_K_M", "download_gb": 8.1, "est_ram_gb": 10.0, "context_k": 128,
+      "license": "Gemma Terms of Use", "license_url": "https://ai.google.dev/gemma/terms",
+      "korean": 4, "summarization": 4, "reasoning": 3, "thinking": false,
+      "description": "한국어 문장이 자연스럽고 긴 문서 요약에 강한 모델입니다. 강의자료·회의록 정리에 추천합니다."
+    },
+    {
+      "id": "qwen3:14b", "family": "Qwen 3", "publisher": "Alibaba Cloud", "display_name": "Qwen 3 · 고성능",
+      "params_b": 14.8, "quantization": "Q4_K_M", "download_gb": 9.3, "est_ram_gb": 12.0, "context_k": 40,
+      "license": "Apache-2.0", "license_url": "https://www.apache.org/licenses/LICENSE-2.0",
+      "korean": 4, "summarization": 4, "reasoning": 5, "thinking": true,
+      "description": "분석과 추론이 필요한 작업에 강한 모델입니다. 연구자료 비교, 데이터 해석 보고서에 적합합니다."
+    },
+    {
+      "id": "gemma3:27b", "family": "Gemma 3", "publisher": "Google", "display_name": "Gemma 3 · 고성능",
+      "params_b": 27.4, "quantization": "Q4_K_M", "download_gb": 17.0, "est_ram_gb": 21.0, "context_k": 128,
+      "license": "Gemma Terms of Use", "license_url": "https://ai.google.dev/gemma/terms",
+      "korean": 5, "summarization": 5, "reasoning": 4, "thinking": false,
+      "description": "이 목록에서 한국어 글쓰기 품질이 가장 높을 것으로 기대되는 큰 모델입니다. 충분한 메모리가 필요합니다."
+    },
+    {
+      "id": "qwen3:30b", "family": "Qwen 3", "publisher": "Alibaba Cloud", "display_name": "Qwen 3 · 대형",
+      "params_b": 30.5, "quantization": "Q4_K_M", "download_gb": 19.0, "est_ram_gb": 23.0, "context_k": 40,
+      "license": "Apache-2.0", "license_url": "https://www.apache.org/licenses/LICENSE-2.0",
+      "korean": 4, "summarization": 5, "reasoning": 5, "thinking": true,
+      "description": "복잡한 분석과 긴 보고서 작성에 적합한 대형 모델입니다. 충분한 메모리가 필요합니다."
+    }
+  ]
+}
