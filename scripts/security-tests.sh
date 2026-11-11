@@ -20,7 +20,8 @@ echo "== 준비: 테스트 빌드 (네트워크 사용 가능 상태) =="
 cargo build -q -p pla-core --features fake-engine --tests --bins
 
 echo "== A. 인터넷 차단 상태에서 전체 테스트 =="
-if unshare -rn true 2>/dev/null; then UNSHARE="unshare -rn"; elif unshare -n true 2>/dev/null; then UNSHARE="unshare -n"; else UNSHARE=""; fi
+# 실제 root면 일반 네트워크 공간을 쓴다 (사용자 네임스페이스에서는 다른 사용자 소유 폴더의 cargo에 접근 못 할 수 있음)
+if unshare -n true 2>/dev/null; then UNSHARE="unshare -n"; elif unshare -rn true 2>/dev/null; then UNSHARE="unshare -rn"; else UNSHARE=""; fi
 if [ -z "$UNSHARE" ]; then
   bad "unshare를 사용할 수 없어 오프라인 테스트를 실행하지 못했습니다"
 else

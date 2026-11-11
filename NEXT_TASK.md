@@ -1,20 +1,16 @@
 # NEXT_TASK — 다음 작업 (순서대로)
 
-1. **실제 앱 실행 확인 (Linux, xvfb)**
-   `cargo build -p pla-core --features fake-engine --bin pla-fake-engine` 후
-   `PLA_DEV_ENGINE_BIN=$PWD/target/debug/pla-fake-engine xvfb-run target/debug/philosophy-local-ai`
-   → 창이 뜨는지, 종료 시 엔진 프로세스가 사라지는지 확인. (PLA_DEV_ENGINE_BIN은 디버그 빌드에서만 동작)
-2. **scripts/pin-engine.mjs 작성**: 공식 릴리스의 `sha256sum.txt`
-   (`https://github.com/ollama/ollama/releases/download/v<버전>/sha256sum.txt`)를 받아
-   `engine-manifest.json`의 각 자산 `sha256`을 채움. 값이 없으면 실패하도록.
-3. **scripts/security-tests.sh 작성**: (a) `unshare -n`으로 네트워크 없는 상태에서 core 테스트 실행,
-   (b) `strace -f -e trace=connect`로 테스트 중 127.0.0.1 이외 연결이 없는지 검사.
-4. **.github/workflows/build.yml 작성**: windows-latest(NSIS), macos-latest(universal DMG)에서
-   pin-engine → 테스트 → `tauri build`. 산출물 업로드. (서명·공증은 시크릿이 있을 때만)
-5. **실제 Ollama 검증** (네트워크가 허용된 환경 필요): 엔진 설치, `gemma3:4b` 내려받기, 채팅,
-   `/api/status`의 cloud.disabled 확인, 오프라인 채팅, 카탈로그 태그 실존 여부 확인.
-6. 한국어 PDF 픽스처 추가 및 추출 테스트.
-7. 문서 완성: 사용자 설명서(docs/USER_GUIDE.md), 설치·제거 안내, 보안 검증 보고서, 라이선스 목록, README.
-8. Windows/macOS 실기 수동 테스트 후 TEST_RESULTS.md 갱신.
+1. **실제 모델 검증** (registry.ollama.ai 접근 가능한 환경, 이 개발 컨테이너에서는 차단됨)
+   - 앱 온보딩으로 `gemma3:4b` 또는 `qwen3:4b` 내려받기 → 실행 테스트 통과 확인
+   - 인터넷을 끊고: 채팅, 한국어 PDF 강의자료 요약, Excel 보고서 생성
+   - `crates/core/tests/fixtures`의 PDF와 프롬프트 인젝션 문서로 답변 내용 확인
+   - 카탈로그 모델 태그가 모두 실존하는지 확인 → 없으면 `catalog.json` 수정
+2. **Windows/macOS 실기 테스트**: CI 산출물(installer-windows-latest, installer-macos-latest) 설치 →
+   첫 실행 → 엔진 설치 → 작업 관리자/활동 모니터에서 앱 강제 종료 시 `ollama` 프로세스가 사라지는지 →
+   `netstat -ano | findstr <포트>` / `lsof -iTCP -sTCP:LISTEN`으로 127.0.0.1 바인딩 확인 → 제거
+3. 코드 서명·공증 설정 (인증서 확보 후 CI 시크릿 사용)
+4. 오픈소스 고지 파일 자동 생성 (`cargo about`, `license-checker`)
+5. 개선 후보: HWP 지원(hwp → 텍스트), 스캔 PDF OCR(로컬), 엔진 버전 업데이트 흐름(새 매니페스트 + pin-engine)
 
-작은 개선 메모: 무결성 확인 단계에서는 '취소' 버튼 숨기기 (`src/lib/download.tsx`).
+엔진 버전을 올릴 때: `node scripts/pin-engine.mjs <새버전>` → 테스트 → 실제 엔진 테스트
+(`PLA_REAL_ENGINE_DIR=/경로 cargo test -p pla-core --test real_engine -- --nocapture`).

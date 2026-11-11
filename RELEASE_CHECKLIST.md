@@ -1,8 +1,12 @@
 # RELEASE_CHECKLIST
-- [ ] engine-manifest.json에 SHA-256 등록 (pin-engine)
-- [ ] 실제 Ollama로 설치·내려받기·채팅·오프라인 검증
-- [ ] SECURITY_CHECKLIST 10개 항목 모두 통과
-- [ ] Windows 설치/실행/제거 실기 테스트 (서명 없으면 SmartScreen 경고 안내)
-- [ ] macOS(Apple Silicon/Intel) 실기 테스트, 서명·공증 (없으면 Gatekeeper 차단 안내)
-- [ ] 카탈로그 모델 태그 실존 확인
-- [ ] 사용자 설명서, 라이선스 목록, 보안 검증 보고서
+- [x] engine-manifest.json에 SHA-256 등록 (`node scripts/pin-engine.mjs`) — v0.40.16
+- [x] 실제 Ollama 엔진 설치·무결성·클라우드 차단·루프백 바인딩 검증 (Linux)
+- [x] 오프라인·연결 감사 보안 스크립트 통과 (Linux)
+- [x] CI에서 Windows NSIS / macOS DMG 빌드 구성 (결과는 TEST_RESULTS.md)
+- [ ] 실제 모델 내려받기·오프라인 채팅·PDF·Excel 보고서 (모델 저장소 접근 가능한 환경)
+- [ ] 카탈로그 모델 태그 실존 확인 (`gemma3:*`, `qwen3:*`)
+- [ ] Windows 10/11 설치·실행·강제 종료·제거 실기 테스트 (SmartScreen 안내 확인)
+- [ ] macOS Apple 칩 / Intel 실기 테스트 (Gatekeeper 안내 확인)
+- [ ] Windows 코드 서명, macOS 서명·공증 (인증서 필요)
+- [ ] `cargo about` 등으로 전체 오픈소스 고지 파일 생성
+- [ ] SECURITY_CHECKLIST 10개 항목 모두 "통과"
