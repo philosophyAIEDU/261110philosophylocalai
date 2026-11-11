@@ -539,15 +539,12 @@ pub fn sha256_file(path: &Path) -> AppResult<String> {
 }
 
 pub fn check_free_space(dir: &Path, need_bytes: u64) -> AppResult<()> {
-    use sysinfo::Disks;
-    let disks = Disks::new_with_refreshed_list();
-    let target = std::fs::canonicalize(dir).unwrap_or_else(|_| dir.to_path_buf());
-    if let Some(d) = disks.iter().filter(|d| target.starts_with(d.mount_point())).max_by_key(|d| d.mount_point().as_os_str().len()) {
-        if d.available_space() < need_bytes {
+    if let Some((free, _)) = crate::hardware::disk_space_for(dir) {
+        if free < need_bytes {
             return Err(AppError::DiskSpace(format!(
                 "약 {:.1}GB가 필요하지만 {:.1}GB만 남아 있습니다",
                 need_bytes as f64 / 1e9,
-                d.available_space() as f64 / 1e9
+                free as f64 / 1e9
             )));
         }
     }
@@ -668,6 +665,13 @@ mod tests {
         std::fs::create_dir_all(&d2).unwrap();
         extract_archive(&tpath, "ok.tgz", &d2).unwrap();
         assert_eq!(std::fs::read_to_string(d2.join("ollama")).unwrap(), "hi");
+    }
+
+    #[test]
+    fn free_space_check_detects_shortage() {
+        let d = tempfile::tempdir().unwrap();
+        assert!(check_free_space(d.path(), 1).is_ok());
+        assert!(matches!(check_free_space(d.path(), u64::MAX / 2), Err(AppError::DiskSpace(_))));
     }
 
     #[test]

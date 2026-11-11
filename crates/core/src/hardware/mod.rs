@@ -191,9 +191,34 @@ fn detect_gpus(_notes: &mut Vec<String>) -> Vec<GpuInfo> {
     gpus
 }
 
+/// 비교용 경로 문자열. Windows의 `\\?\` 접두사를 떼고 대소문자를 무시한다.
+fn mount_key(p: &Path) -> String {
+    let s = p.to_string_lossy().replace('\\', "/");
+    let s = s.strip_prefix("//?/UNC/").map(|r| format!("//{r}")).or_else(|| s.strip_prefix("//?/").map(|r| r.to_string())).unwrap_or(s);
+    if cfg!(windows) { s.to_lowercase() } else { s }
+}
+
+/// 경로가 속한 디스크의 (여유 공간, 전체 공간). 경로가 아직 없으면 존재하는 상위 폴더 기준.
+pub fn disk_space_for(path: &Path) -> Option<(u64, u64)> {
+    use sysinfo::Disks;
+    let existing = path.ancestors().find(|p| p.exists()).unwrap_or(path);
+    let target = std::fs::canonicalize(existing).unwrap_or_else(|_| existing.to_path_buf());
+    let key = mount_key(&target);
+    let disks = Disks::new_with_refreshed_list();
+    disks
+        .iter()
+        .filter(|d| {
+            let m = mount_key(d.mount_point());
+            let m = m.trim_end_matches('/');
+            key == m || key.starts_with(&format!("{m}/")) || m.is_empty()
+        })
+        .max_by_key(|d| mount_key(d.mount_point()).len())
+        .map(|d| (d.available_space(), d.total_space()))
+}
+
 /// 컴퓨터 사양을 진단한다. `data_dir`은 모델이 저장될 폴더 (여유 공간 확인용).
 pub fn detect(data_dir: &Path) -> HardwareProfile {
-    use sysinfo::{Disks, System};
+    use sysinfo::System;
     let mut sys = System::new();
     sys.refresh_memory();
     sys.refresh_cpu_all();
@@ -216,20 +241,10 @@ pub fn detect(data_dir: &Path) -> HardwareProfile {
         notes.push("그래픽 메모리 크기를 정확히 확인하지 못한 장치가 있어, 추천은 보수적으로 계산했습니다.".into());
     }
 
-    // data_dir이 속한 디스크 (가장 긴 마운트 지점 일치)
-    let disks = Disks::new_with_refreshed_list();
-    let target = std::fs::canonicalize(data_dir).unwrap_or_else(|_| {
-        data_dir.ancestors().find(|p| p.exists()).map(|p| p.to_path_buf()).unwrap_or_else(|| data_dir.to_path_buf())
+    let (disk_free, disk_total) = disk_space_for(data_dir).unwrap_or_else(|| {
+        notes.push("저장 공간을 확인하지 못했습니다.".into());
+        (0, 0)
     });
-    let (disk_free, disk_total) = disks
-        .iter()
-        .filter(|d| target.starts_with(d.mount_point()))
-        .max_by_key(|d| d.mount_point().as_os_str().len())
-        .map(|d| (d.available_space(), d.total_space()))
-        .unwrap_or_else(|| {
-            notes.push("저장 공간을 확인하지 못했습니다.".into());
-            (0, 0)
-        });
 
     HardwareProfile {
         os_name: System::name().unwrap_or_else(|| std::env::consts::OS.to_string()),
@@ -253,6 +268,13 @@ pub fn detect(data_dir: &Path) -> HardwareProfile {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn mount_key_normalizes_windows_paths() {
+        assert_eq!(mount_key(Path::new(r"\\?\D:\a\b")).to_lowercase(), "d:/a/b");
+        assert_eq!(mount_key(Path::new(r"D:\")).to_lowercase(), "d:/");
+        assert_eq!(mount_key(Path::new("/home/x")), "/home/x");
+    }
 
     #[test]
     fn detect_runs_on_this_machine() {
