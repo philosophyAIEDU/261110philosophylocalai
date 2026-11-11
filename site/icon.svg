@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#22305c"/>
+      <stop offset="1" stop-color="#131b38"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#e9cf8f"/>
+      <stop offset="1" stop-color="#b8923f"/>
+    </linearGradient>
+  </defs>
+  <rect x="64" y="64" width="896" height="896" rx="208" fill="url(#bg)"/>
+  <rect x="96" y="96" width="832" height="832" rx="180" fill="none" stroke="url(#gold)" stroke-width="10" opacity="0.55"/>
+  <!-- Φ : 철학(Philosophy)의 머리글자 -->
+  <ellipse cx="512" cy="512" rx="212" ry="168" fill="none" stroke="#f6efe0" stroke-width="64"/>
+  <rect x="480" y="236" width="64" height="552" rx="32" fill="url(#gold)"/>
+  <!-- 로컬(내 컴퓨터 안) 을 뜻하는 작은 자물쇠 점 -->
+  <circle cx="770" cy="770" r="58" fill="#7c5cc4"/>
+  <rect x="748" y="762" width="44" height="34" rx="8" fill="#f6efe0"/>
+  <path d="M756 764v-12a14 14 0 0 1 28 0v12" fill="none" stroke="#f6efe0" stroke-width="9" stroke-linecap="round"/>
+</svg>
