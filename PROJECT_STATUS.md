@@ -1,22 +1,33 @@
 # PROJECT_STATUS — 현재 개발 상태 (2026-11-11)
 
-## 완료 (코드 작성 + 이 Linux 개발 환경에서 테스트 통과)
-- `crates/core` (pla-core): 보안(NetGuard·암호화·개인정보 제거), 하드웨어 진단, 모델 카탈로그·추천,
-  AiRuntime 어댑터 + Ollama 클라이언트, 관리형 엔진 설치·프로세스 관리, 문서 추출(PDF/DOCX/PPTX/TXT),
-  근거 검색, Excel/CSV 통계, SQLite 암호화 저장소, Word/Excel 내보내기, 업무 프롬프트(17종)
-- 테스트: `cargo test -p pla-core --features fake-engine` → 단위 54 + 통합 11 + 정적 보안 5 = 70개 통과
-- `src-tauri`: Tauri 2 명령 계층(38개 명령), CSP·권한 최소화, 단일 실행, 종료 시 엔진 정리 — 컴파일 통과
-- `src/`: React 화면 9개 메뉴 + 온보딩. `npm run build` 통과, 브라우저 미리보기로 전 화면 동작 확인(콘솔 오류 0)
-- `npx tauri build --debug --no-bundle` 성공 (Linux 디버그 실행 파일 생성)
+## 최종 결과물 현황 (요구사항 14절 기준)
 
-## 아직 하지 않은 것 / 검증하지 못한 것 (중요)
-- **실제 Ollama로 한 번도 실행하지 못함.** 이 개발 환경은 ollama.com / registry.ollama.ai / GitHub 릴리스
-  자산 접근이 막혀 있음. 모든 엔진 테스트는 가짜 엔진(`pla-fake-engine`)으로 수행함.
-- **엔진 SHA-256 미등록**: `crates/core/src/runtime/engine-manifest.json`의 `sha256`이 모두 `null`.
-  이 상태에서는 앱이 엔진 설치를 거부함(fail-closed). `scripts/pin-engine.mjs`(미작성)로 채워야 함.
-- **Windows / macOS에서 빌드·실행·설치 테스트 전혀 못 함.** 설치 파일(NSIS, DMG) 미생성. CI 워크플로 미작성.
-- 실제 Tauri 앱 창을 띄운 E2E 확인(xvfb) 미수행 — 빌드만 확인.
-- 모델 카탈로그의 이름·크기는 개발자 지식 기준이며 이번 세션에서 ollama.com으로 재확인하지 못함.
-- 한국어 PDF 실물 파일 추출 테스트 없음(손상 PDF 처리만 테스트). 스캔 PDF(OCR), HWP 미지원.
-- 코드 서명·공증 미수행.
-- 문서: SECURITY_MODEL/ARCHITECTURE 등은 요약본만 있음. 사용자 설명서·보안 검증 보고서 미작성.
+| # | 결과물 | 상태 |
+|---|---|---|
+| 1 | 실행 가능한 전체 소스코드 | ✅ 완료 |
+| 2 | Windows 설치 파일 | 🟡 CI에서 NSIS 빌드 (서명 없음, 실기 미검증) — TEST_RESULTS.md 4절 |
+| 3 | macOS 설치 파일 | 🟡 CI에서 universal DMG 빌드 (서명·공증 없음, 실기 미검증) — TEST_RESULTS.md 4절 |
+| 4 | Ollama 관리형 실행 환경 | ✅ 실제 Ollama 0.40.16으로 설치·무결성·실행·클라우드 차단·정리 검증 (Linux) |
+| 5 | 하드웨어 진단 | ✅ Linux 실측, macOS CI 실행, Windows는 출력 파서 단위 테스트 |
+| 6 | 모델 추천 및 원클릭 다운로드 | 🟡 추천·내려받기 흐름 완성. **실제 모델 내려받기 미검증**(개발 환경 차단) |
+| 7 | 로컬 AI 채팅 | 🟡 완성, 가짜 엔진으로 검증. 실제 모델 미검증 |
+| 8 | 교수님 전용 업무 기능 | 🟡 완성(강의·학생·연구·행정·Excel). 실제 모델 응답 품질 미검증 |
+| 9 | 개인정보 보호 기능 | ✅ 완료, 보안 테스트 통과 (실제 모델 관련 3항목 부분) |
+| 10 | 사용자 설명서 | ✅ docs/USER_GUIDE.md |
+| 11 | 설치 및 제거 안내 | ✅ docs/USER_GUIDE.md 1·6절 |
+| 12 | 테스트 결과 보고서 | ✅ TEST_RESULTS.md |
+| 13 | 보안 검증 보고서 | ✅ docs/SECURITY_REPORT.md |
+| 14 | 소프트웨어·모델 라이선스 목록 | ✅ docs/LICENSES.md (자동 생성 전체 고지는 미작성) |
+| 15 | GitHub README | ✅ README.md |
+
+## 배포 가능 여부
+**아직 공개 배포 불가.** 남은 검증(NEXT_TASK.md):
+1. 실제 AI 모델 내려받기와 오프라인 사용 (모델 저장소 접근 가능한 환경 필요)
+2. Windows·macOS 실기 설치·실행·제거
+3. 코드 서명·공증
+
+## 코드 구성
+- `crates/core` (pla-core): 보안·진단·추천·엔진·문서·통계·저장·내보내기·업무 프롬프트
+- `src-tauri`: Tauri 2 명령 계층(38개), CSP·권한 최소화, 단일 실행, 강제 종료 시 엔진 정리
+- `src`: React 화면 — 온보딩 + 9개 메뉴, 다크 모드
+- `scripts`: `pin-engine.mjs`, `security-tests.sh` · `.github/workflows/build.yml`

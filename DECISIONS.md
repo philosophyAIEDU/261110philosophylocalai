@@ -12,3 +12,6 @@
 10. **임베딩 없이 글자 2-gram 검색**으로 문서 Q&A — 추가 모델 다운로드 불필요.
 11. 모델 `think: false` 고정(Ollama는 비지원 모델에 false를 보내도 오류 없음 — server/routes.go 확인).
 12. reqwest 0.12 / keyring 3 / zip 2.4.2 고정(최신 메이저와 API·호환성 차이).
+13. **다운로드 TLS는 OS 인증서 저장소(rustls native roots)** — 대학의 TLS 검사 프록시와 호환. 엔진 파일 무결성은 SHA-256 고정으로 독립 보장.
+14. **앱 강제 종료 시 엔진 정리**: Linux `PR_SET_PDEATHSIG`, macOS/Linux 종료 신호 처리, Windows Job Object(`KILL_ON_JOB_CLOSE`), 다음 실행 시 PID+실행 파일 경로 확인 후 정리.
+15. **엔진 버전 0.40.16 고정** (2026-11-10 기준 최신 안정판). 갱신 시 `scripts/pin-engine.mjs`.
