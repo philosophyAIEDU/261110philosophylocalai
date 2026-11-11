@@ -19,9 +19,10 @@ flate2 = "1"
 futures-util = "0.3"
 hex = "0.4"
 pdf-extract = "0.7"
+lopdf = "=0.34.0"
 quick-xml = "0.37"
 regex = "1"
-reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json", "stream"] }
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls-native-roots", "json", "stream"] }
 rusqlite = { version = "0.32", features = ["bundled"] }
 rust_xlsxwriter = "0.79"
 serde = { version = "1", features = ["derive"] }
@@ -51,3 +52,9 @@ fake-engine = ["dep:axum"]
 name = "pla-fake-engine"
 path = "src/bin/fake_engine.rs"
 required-features = ["fake-engine"]
+
+[target.'cfg(target_os = "linux")'.dependencies]
+libc = "0.2"
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_Security", "Win32_System_JobObjects", "Win32_System_Threading"] }

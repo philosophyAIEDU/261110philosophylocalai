@@ -321,9 +321,23 @@ impl EngineManager {
         {
             cmd.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
         }
+        #[cfg(target_os = "linux")]
+        unsafe {
+            // 앱 프로세스가 어떤 이유로든 끝나면 엔진도 함께 종료되게 한다.
+            cmd.pre_exec(|| {
+                if libc::prctl(libc::PR_SET_PDEATHSIG, libc::SIGTERM) != 0 {
+                    return Err(std::io::Error::last_os_error());
+                }
+                Ok(())
+            });
+        }
         let mut child = cmd.spawn().map_err(|_| AppError::Runtime("AI 실행 엔진을 시작하지 못했습니다. 보안 프로그램이 실행을 막고 있는지 확인해 주세요.".into()))?;
         if let Some(pid) = child.id() {
             let _ = std::fs::write(self.pid_file(), pid.to_string());
+        }
+        #[cfg(windows)]
+        if let Some(h) = child.raw_handle() {
+            win_job::assign(h);
         }
 
         // 준비될 때까지 대기 (최대 40초)
@@ -378,6 +392,51 @@ impl EngineManager {
 
     pub async fn pid(&self) -> Option<u32> {
         self.child.lock().await.as_ref().and_then(|c| c.0.id())
+    }
+}
+
+/// Windows: 앱 프로세스가 끝나면(강제 종료 포함) 엔진과 그 하위 프로세스를 함께 종료하는 Job Object.
+#[cfg(windows)]
+mod win_job {
+    use std::sync::OnceLock;
+    use windows_sys::Win32::System::JobObjects::{
+        AssignProcessToJobObject, CreateJobObjectW, JobObjectExtendedLimitInformation, SetInformationJobObject,
+        JOBOBJECT_EXTENDED_LIMIT_INFORMATION, JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
+    };
+
+    struct Job(isize);
+    // 핸들 값만 보관하며, 앱이 끝날 때 운영체제가 닫는다 (그 순간 엔진이 종료된다).
+    static JOB: OnceLock<Option<Job>> = OnceLock::new();
+
+    fn job() -> Option<isize> {
+        JOB.get_or_init(|| unsafe {
+            let h = CreateJobObjectW(std::ptr::null(), std::ptr::null());
+            if h.is_null() {
+                return None;
+            }
+            let mut info: JOBOBJECT_EXTENDED_LIMIT_INFORMATION = std::mem::zeroed();
+            info.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+            let ok = SetInformationJobObject(
+                h,
+                JobObjectExtendedLimitInformation,
+                &info as *const _ as *const core::ffi::c_void,
+                std::mem::size_of::<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>() as u32,
+            );
+            if ok == 0 {
+                return None;
+            }
+            Some(Job(h as isize))
+        })
+        .as_ref()
+        .map(|j| j.0)
+    }
+
+    pub fn assign(process: std::os::windows::io::RawHandle) {
+        if let Some(j) = job() {
+            unsafe {
+                AssignProcessToJobObject(j as _, process as _);
+            }
+        }
     }
 }
 

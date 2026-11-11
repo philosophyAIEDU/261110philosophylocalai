@@ -704,6 +704,24 @@ pub fn run() {
             let data_dir = app.path().app_local_data_dir().map_err(|_| AppError::Storage("앱 데이터 폴더를 찾을 수 없습니다".into()))?;
             let state = build_state(data_dir)?;
             app.manage(state);
+            // macOS/Linux: 종료 신호(로그아웃·시스템 종료·kill)를 받아도 엔진을 정리하고 끝낸다.
+            #[cfg(unix)]
+            {
+                let handle = app.handle().clone();
+                tauri::async_runtime::spawn(async move {
+                    use tokio::signal::unix::{signal, SignalKind};
+                    let (Ok(mut term), Ok(mut int), Ok(mut hup)) =
+                        (signal(SignalKind::terminate()), signal(SignalKind::interrupt()), signal(SignalKind::hangup()))
+                    else {
+                        return;
+                    };
+                    tokio::select! { _ = term.recv() => {}, _ = int.recv() => {}, _ = hup.recv() => {} }
+                    if let Some(state) = handle.try_state::<AppState>() {
+                        state.engine.stop().await;
+                    }
+                    handle.exit(0);
+                });
+            }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

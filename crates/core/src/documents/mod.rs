@@ -99,8 +99,11 @@ fn extract_pdf(path: &Path, warnings: &mut Vec<String>) -> AppResult<(String, Op
     let res = std::panic::catch_unwind(|| pdf_extract::extract_text_from_mem(&bytes));
     match res {
         Ok(Ok(text)) => {
-            let pages = text.matches('\u{c}').count();
-            Ok((text.replace('\u{c}', "\n\n"), if pages > 0 { Some(pages) } else { None }))
+            let pages = std::panic::catch_unwind(|| lopdf::Document::load_mem(&bytes).ok().map(|d| d.get_pages().len()))
+                .ok()
+                .flatten()
+                .filter(|n| *n > 0);
+            Ok((text.replace('\u{c}', "\n\n"), pages))
         }
         Ok(Err(_)) | Err(_) => {
             warnings.push("PDF를 읽는 중 문제가 있었습니다.".into());

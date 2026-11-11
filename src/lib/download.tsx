@@ -126,7 +126,7 @@ export function DownloadFlow({ model, onDone, doneLabel = "AI 사용 시작하�
                 <span className="font-semibold">
                   {phase === "starting" ? "AI 실행 엔진을 시작하는 중" : phase === "testing" ? "AI가 잘 작동하는지 확인하는 중" : progress?.stage ?? "준비하는 중"}
                 </span>
-                {(phase === "engine" || phase === "model") && <button className="btn-ghost btn-sm" onClick={cancel}>취소</button>}
+                {(phase === "engine" || phase === "model") && !progress?.verifying && <button className="btn-ghost btn-sm" onClick={cancel}>취소</button>}
               </div>
               {(phase === "engine" || phase === "model") && (
                 <>
