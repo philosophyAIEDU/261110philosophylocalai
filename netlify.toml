@@ -1,0 +1,13 @@
+# Netlify: 소개·다운로드 페이지(site/)만 게시합니다. 앱 본체는 설치 파일로 배포되며 웹으로는 실행되지 않습니다.
+[build]
+  publish = "site"
+  command = "echo 'static site'"
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Content-Type-Options = "nosniff"
+    X-Frame-Options = "DENY"
+    Referrer-Policy = "no-referrer"
+    Permissions-Policy = "camera=(), microphone=(), geolocation=()"
+    Content-Security-Policy = "default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"

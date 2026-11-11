@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>필로소피 로컬 AI — 교수님의 컴퓨터 안에서만 일하는 AI</title>
+<meta name="description" content="학생 정보, 강의자료, 연구자료를 인터넷으로 보내지 않고 내 컴퓨터 안에서 분석하는 교수님용 로컬 AI 프로그램. Windows·Mac 설치 파일 내려받기.">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<style>
+:root{--bg:#f8f4ea;--surface:#fffdf8;--surface2:#f1ebdc;--text:#1b2444;--muted:#5d6480;--border:#e2d9c4;--navy:#1b2647;--navy2:#2a3866;--purple:#6a4fb5;--purple-soft:#ece6f8;--gold:#b8923f;--gold-soft:#f5ecd3;--ok:#2f7d5b;--ok-soft:#e2f1ea;--warn:#a8641a;--warn-soft:#fbeed9;--on:#fffdf8}
+@media (prefers-color-scheme:dark){:root{--bg:#111730;--surface:#1a2242;--surface2:#232c52;--text:#f1ecdf;--muted:#a9aecb;--border:#323c68;--navy:#d9bd76;--navy2:#e6cf96;--purple:#b39cf0;--purple-soft:#2c2752;--gold:#d9bd76;--gold-soft:#3a3423;--ok:#6fcfa3;--ok-soft:#1c3a30;--warn:#e6b062;--warn-soft:#3d311d;--on:#141a35}}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--text);font-family:"Pretendard Variable",Pretendard,"Apple SD Gothic Neo","Malgun Gothic","맑은 고딕",system-ui,sans-serif;font-size:16px;line-height:1.7;word-break:keep-all;overflow-wrap:anywhere;-webkit-font-smoothing:antialiased}
+a{color:var(--purple)}
+:focus-visible{outline:3px solid var(--purple);outline-offset:3px;border-radius:8px}
+.wrap{max-width:1000px;margin:0 auto;padding:0 20px}
+header.top{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:20px 0}
+.brand{display:flex;align-items:center;gap:12px;font-weight:700;text-decoration:none;color:var(--text)}
+.brand img{width:40px;height:40px;border-radius:10px}
+.brand small{display:block;font-weight:500;font-size:12px;color:var(--muted);line-height:1.2}
+nav.links a{margin-left:18px;font-size:14.5px;color:var(--muted);text-decoration:none}
+nav.links a:hover{color:var(--text)}
+.hero{background:var(--navy);color:var(--on);border-radius:28px;padding:56px 44px;margin:8px 0 28px}
+.badge{display:inline-flex;gap:8px;align-items:center;border:1px solid currentColor;border-radius:99px;padding:6px 14px;font-size:13px;font-weight:700;letter-spacing:.03em;opacity:.95;margin-bottom:20px}
+.hero h1{font-size:clamp(28px,5vw,44px);line-height:1.25;margin:0 0 16px;letter-spacing:-.015em}
+.hero p.lead{font-size:clamp(16px,2.2vw,19px);max-width:36em;margin:0 0 24px;opacity:.9}
+.hero ul{list-style:none;padding:0;margin:0 0 30px;display:flex;flex-wrap:wrap;gap:8px 24px;font-weight:600;font-size:15px}
+.hero ul li::before{content:"✓ ";font-weight:800}
+.btns{display:flex;flex-wrap:wrap;gap:12px}
+.btn{display:inline-flex;align-items:center;gap:10px;padding:14px 22px;border-radius:14px;font-weight:700;font-size:16px;text-decoration:none;border:2px solid transparent}
+.btn-gold{background:var(--gold);color:var(--on)}
+.btn-gold:hover{filter:brightness(1.06)}
+.btn-line{border-color:currentColor;color:inherit}
+.btn-line:hover{background:rgba(255,255,255,.1)}
+.motto{margin-top:26px;font-size:13px;opacity:.65;font-weight:600;letter-spacing:.03em}
+section{padding:44px 0}
+section h2{font-size:clamp(22px,3.4vw,30px);margin:0 0 8px;letter-spacing:-.01em}
+.sub{color:var(--muted);margin:0 0 26px;max-width:42em}
+.grid{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(260px,1fr))}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:22px}
+.card h3{margin:0 0 6px;font-size:17px}
+.card p{margin:0;color:var(--muted);font-size:15px}
+.ico{display:inline-flex;width:42px;height:42px;border-radius:12px;background:var(--gold-soft);color:var(--gold);align-items:center;justify-content:center;font-size:20px;margin-bottom:12px}
+.notice{border-radius:16px;padding:16px 20px;font-size:15px;margin:0 0 18px;border:1px solid}
+.notice.warn{background:var(--warn-soft);border-color:color-mix(in srgb,var(--warn) 35%,transparent)}
+.notice.ok{background:var(--ok-soft);border-color:color-mix(in srgb,var(--ok) 35%,transparent)}
+.notice b{display:block;margin-bottom:2px}
+.dl{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));margin-bottom:20px}
+.dl .card{display:flex;flex-direction:column;gap:10px}
+.dl .card .btn{margin-top:auto;justify-content:center;background:var(--navy);color:var(--on)}
+.dl .card .btn:hover{background:var(--navy2)}
+.meta{font-size:13px;color:var(--muted)}
+ol.steps{list-style:none;padding:0;margin:0;counter-reset:s;display:grid;gap:12px}
+ol.steps li{counter-increment:s;background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:16px 18px 16px 64px;position:relative}
+ol.steps li::before{content:counter(s);position:absolute;left:18px;top:14px;width:32px;height:32px;border-radius:50%;background:var(--purple-soft);color:var(--purple);font-weight:800;display:flex;align-items:center;justify-content:center}
+ol.steps b{display:block}
+details{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:4px 20px;margin-bottom:12px}
+summary{cursor:pointer;font-weight:700;padding:14px 0}
+details .body{padding:0 0 16px;color:var(--text)}
+details .body ol{margin:8px 0 0;padding-left:20px}
+details .body li{margin:4px 0}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.chip{background:var(--surface2);border-radius:99px;padding:5px 12px;font-size:13.5px;font-weight:600}
+table{width:100%;border-collapse:collapse;font-size:15px;background:var(--surface);border:1px solid var(--border);border-radius:16px;overflow:hidden}
+th,td{padding:12px 16px;text-align:left;border-bottom:1px solid var(--border);vertical-align:top}
+th{background:var(--surface2);font-size:13.5px;color:var(--muted)}
+tr:last-child td{border-bottom:0}
+td:first-child,th:first-child{min-width:130px}
+table{min-width:520px}
+.tablewrap{overflow-x:auto}
+footer{border-top:1px solid var(--border);padding:28px 0 48px;color:var(--muted);font-size:14px}
+footer p{margin:4px 0}
+@media (max-width:640px){.hero{padding:36px 24px;border-radius:22px}nav.links{display:none}}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <a class="brand" href="#top"><img src="icon.svg" alt=""><span>필로소피 로컬 AI<small>Philosophy Local AI</small></span></a>
+    <nav class="links" aria-label="페이지 안내"><a href="#why">특징</a><a href="#download">내려받기</a><a href="#install">설치 방법</a><a href="#faq">자주 묻는 질문</a></nav>
+  </header>
+
+  <main id="top">
+    <div class="hero">
+      <div class="badge">🔒 LOCAL AI · 내 컴퓨터 안에서만 실행되는 AI</div>
+      <h1>교수님의 연구와 수업을 돕는<br>나만의 AI</h1>
+      <p class="lead">중요한 자료는 내 컴퓨터에서 안전하게 관리하고, AI의 도움으로 업무를 더 효율적으로 처리하세요.</p>
+      <ul>
+        <li>인터넷 없이도 작동합니다</li>
+        <li>자료가 외부 서버로 가지 않습니다</li>
+        <li>클라우드 AI를 사용하지 않습니다</li>
+      </ul>
+      <div class="btns">
+        <a class="btn btn-gold" href="#download">⬇ 설치 파일 내려받기</a>
+        <a class="btn btn-line" href="#install">설치 방법 보기</a>
+      </div>
+      <div class="motto">AI로 성장하고, 그 성장을 나눈다</div>
+    </div>
+
+    <div class="notice warn" role="note">
+      <b>시험판(v0.1.0-beta.1)입니다</b>
+      실제 AI 모델로 하는 검증과 Windows·Mac 실제 컴퓨터에서의 설치 시험이 아직 끝나지 않았습니다. 처음에는 <b style="display:inline">가상 자료로 먼저 사용해 보시고</b>, 실제 학생 개인정보는 충분히 시험한 뒤에 사용해 주세요.
+    </div>
+
+    <section id="why">
+      <h2>이런 분께 필요합니다</h2>
+      <p class="sub">학생 상담 기록, 성적, 대학 내부 문서, 미발표 연구자료를 AI로 정리하고 싶지만 외부 서버로 보내는 것은 걱정되셨던 교수님을 위한 프로그램입니다.</p>
+      <div class="grid">
+        <div class="card"><div class="ico">🔒</div><h3>내 컴퓨터 안에서만 처리</h3><p>AI가 교수님의 컴퓨터에서 직접 실행됩니다. 문서, 질문, 대화가 인터넷으로 나가지 않습니다. 그리고 “로컬 전용”이라는 표시는 설정값이 아니라 실행 중인 AI를 직접 검사해서 확인된 경우에만 켜집니다.</p></div>
+        <div class="card"><div class="ico">🖥</div><h3>컴퓨터에 맞는 AI를 추천</h3><p>메모리, 그래픽, 저장 공간을 자동으로 확인하고 빠른 AI·균형 잡힌 AI·고성능 AI 중 알맞은 2~3개를 추천합니다.</p></div>
+        <div class="card"><div class="ico">⬇</div><h3>버튼 한 번으로 준비</h3><p>터미널 명령어나 별도 프로그램 설치 없이 AI 실행 엔진과 모델을 자동으로 내려받고, 파일이 올바른지 확인한 뒤 실제로 작동하는지 시험합니다.</p></div>
+        <div class="card"><div class="ico">📊</div><h3>숫자는 정확하게</h3><p>Excel·CSV의 평균, 합계, 빈 값은 AI가 추측하지 않고 프로그램이 직접 계산합니다. AI는 계산된 표를 해석해 보고서를 씁니다.</p></div>
+      </div>
+    </section>
+
+    <section id="features">
+      <h2>할 수 있는 일</h2>
+      <p class="sub">결과는 Word(.docx), Excel(.xlsx), 텍스트 파일로 저장할 수 있습니다.</p>
+      <div class="grid">
+        <div class="card"><h3>AI와 대화하기</h3><p>질문, 글 초안, 아이디어 정리. 응답 중지와 복사, 대화 기록 저장 여부 선택.</p></div>
+        <div class="card"><h3>강의자료 분석</h3><p>PDF·Word·PowerPoint·텍스트를 요약하고 핵심 개념, 수업 목표, 토론 질문, 퀴즈 초안을 만듭니다. 근거가 된 부분을 함께 보여 줍니다.</p></div>
+        <div class="card"><h3>학생 지도</h3><p>상담 기록을 암호화해 보관하고 검색하며, 요약과 지도 계획 초안을 만듭니다.</p></div>
+        <div class="card"><h3>연구자료 분석</h3><p>연구자료 요약, 논문 비교, 주제별 정리, 보고서 초안. 없는 참고문헌을 만들어 내지 않도록 설정되어 있습니다.</p></div>
+        <div class="card"><h3>행정업무 도우미</h3><p>회의록, 업무보고서, 행사 결과보고서, 공문, 교육 프로그램 운영보고서 초안.</p></div>
+        <div class="card"><h3>Excel 데이터 분석</h3><p>기초 통계, 빈 값 확인, 항목별 집계, 그래프, 분석 보고서.</p></div>
+      </div>
+    </section>
+
+    <section id="download">
+      <h2>내려받기</h2>
+      <p class="sub">컴퓨터에 맞는 파일을 받아 설치하세요. 설치 파일은 GitHub의 공식 릴리스에서 내려받습니다.</p>
+      <div class="dl">
+        <div class="card">
+          <h3>Windows</h3>
+          <p class="meta">Windows 10·11 (64비트) · 약 6.8MB · 관리자 권한 필요 없음</p>
+          <a class="btn" href="https://github.com/philosophyAIEDU/261110philosophylocalai/releases/download/v0.1.0-beta.1/Philosophy.Local.AI_0.1.0_x64-setup.exe">⬇ Windows용 내려받기</a>
+        </div>
+        <div class="card">
+          <h3>Mac</h3>
+          <p class="meta">macOS 12 이상 · Apple 칩·Intel 공용 · 약 18MB</p>
+          <a class="btn" href="https://github.com/philosophyAIEDU/261110philosophylocalai/releases/download/v0.1.0-beta.1/Philosophy.Local.AI_0.1.0_universal.dmg">⬇ Mac용 내려받기</a>
+        </div>
+      </div>
+      <p class="meta">권장 사양: 메모리 8GB 이상, 여유 저장 공간 10GB 이상. 설치 파일은 작지만, 첫 실행 때 AI 실행 엔진과 AI 모델(수 GB)을 내려받습니다. 전체 릴리스 정보: <a href="https://github.com/philosophyAIEDU/261110philosophylocalai/releases/tag/v0.1.0-beta.1" rel="noopener">GitHub 릴리스 페이지</a></p>
+    </section>
+
+    <section id="install">
+      <h2>설치 방법</h2>
+      <p class="sub">현재 시험판은 코드 서명이 없어서 처음 설치할 때 경고 창이 나옵니다. 아래 순서대로 진행하시면 됩니다.</p>
+
+      <details open>
+        <summary>Windows에서 설치하기</summary>
+        <div class="body"><ol>
+          <li>내려받은 <b>Philosophy.Local.AI_…_x64-setup.exe</b>를 두 번 누릅니다.</li>
+          <li>파란색 <b>“Windows의 PC 보호”</b> 창이 나오면 <b>추가 정보</b>를 누른 뒤 <b>실행</b>을 누릅니다.</li>
+          <li>안내에 따라 설치합니다. 교수님 계정에만 설치되며 관리자 권한은 필요하지 않습니다.</li>
+          <li>설치가 끝나면 바탕화면 또는 시작 메뉴에서 <b>Philosophy Local AI</b>를 실행합니다.</li>
+        </ol></div>
+      </details>
+      <details>
+        <summary>Mac에서 설치하기</summary>
+        <div class="body"><ol>
+          <li>내려받은 <b>.dmg</b> 파일을 열고, 앱을 <b>응용 프로그램</b> 폴더로 끌어다 놓습니다.</li>
+          <li>응용 프로그램에서 앱을 열면 “확인되지 않은 개발자” 경고가 나올 수 있습니다. 일단 닫아 주세요.</li>
+          <li><b>시스템 설정 → 개인정보 보호 및 보안</b>으로 가서 아래쪽의 <b>“그래도 열기”</b>를 누릅니다.</li>
+          <li>암호를 입력하면 앱이 열립니다. 이 과정은 처음 한 번만 필요합니다.</li>
+        </ol></div>
+      </details>
+
+      <h2 style="margin-top:34px;font-size:22px">처음 실행하면</h2>
+      <ol class="steps" style="margin-top:14px">
+        <li><b>컴퓨터 확인</b>메모리와 그래픽을 자동으로 확인합니다. 이 정보는 어디로도 전송되지 않습니다.</li>
+        <li><b>AI 고르기</b>주로 하실 일을 고르면 알맞은 AI 2~3개를 추천합니다. 처음에는 “균형 잡힌 추천 AI”를 권합니다.</li>
+        <li><b>AI 내려받기</b>인터넷 사용에 동의하고 “이 AI 다운로드하기”를 누르면 필요한 것을 모두 자동으로 설치합니다. 인터넷은 이때만 사용합니다.</li>
+        <li><b>사용 시작</b>준비가 끝나면 AI가 실제로 답하는지 확인한 뒤 바로 사용할 수 있습니다.</li>
+      </ol>
+    </section>
+
+    <section id="privacy">
+      <h2>개인정보는 이렇게 지켜집니다</h2>
+      <p class="sub">보안과 개인정보 보호를 가장 우선해서 만들었습니다.</p>
+      <div class="tablewrap"><table>
+        <thead><tr><th>걱정되는 점</th><th>이렇게 처리합니다</th></tr></thead>
+        <tbody>
+          <tr><td>자료가 외부로 전송될까?</td><td>AI가 이 컴퓨터(127.0.0.1) 안에서만 실행되며, AI에게 보내는 요청은 이 컴퓨터 밖으로 나가지 않도록 앱이 직접 막습니다. 인터넷은 AI 실행 엔진과 AI 모델을 내려받을 때만, 동의한 경우에만 사용합니다.</td></tr>
+          <tr><td>클라우드 AI를 쓰지는 않나?</td><td>AI 엔진의 클라우드 기능을 꺼 두고, 실제로 꺼져 있는지 실행 중에 검사합니다. 클라우드 모델은 선택할 수 없습니다.</td></tr>
+          <tr><td>저장된 자료는?</td><td>대화와 상담 기록은 암호화되어 이 컴퓨터에만 저장되고, 암호화 키는 운영체제의 보안 저장소에 보관됩니다. 대화 기록 저장은 기본으로 꺼져 있고, 언제든 완전히 삭제할 수 있습니다.</td></tr>
+          <tr><td>사용 기록을 수집하나?</td><td>사용 통계, 오류 보고, 클라우드 백업을 하지 않습니다. 앱이 인터넷을 사용한 내역은 “개인정보 보호 설정”에서 직접 확인할 수 있습니다.</td></tr>
+        </tbody>
+      </table></div>
+      <p class="meta" style="margin-top:12px">학생 개인정보의 수집·이용·보관은 소속 대학의 개인정보 보호 규정을 따라 주세요.</p>
+      <div class="notice ok" style="margin-top:18px"><b>확인된 것</b>실제 Ollama 엔진으로 공식 파일 무결성, 클라우드 기능 꺼짐, 외부 접속 차단, 종료 시 정리를 확인했고, 인터넷을 끊은 상태에서 앱 기능 테스트를 모두 통과했습니다. (Linux 환경 기준. 자세한 내용은 <a href="https://github.com/philosophyAIEDU/261110philosophylocalai/blob/main/docs/SECURITY_REPORT.md" rel="noopener">보안 검증 보고서</a>)</div>
+    </section>
+
+    <section id="faq">
+      <h2>자주 묻는 질문</h2>
+      <details><summary>인터넷이 없어도 쓸 수 있나요?</summary><div class="body">네. AI 실행 엔진과 AI 모델을 한 번 내려받은 뒤에는 인터넷 없이도 모든 기능을 사용할 수 있습니다.</div></details>
+      <details><summary>이 페이지에서 바로 AI를 쓸 수 있나요?</summary><div class="body">아니요. 이 페이지는 안내와 내려받기를 위한 페이지입니다. 자료를 외부 서버로 보내지 않는 것이 이 프로그램의 핵심이라, 반드시 컴퓨터에 설치해서 사용합니다.</div></details>
+      <details><summary>컴퓨터 사양이 낮아도 되나요?</summary><div class="body">메모리 8GB 이상을 권장합니다. 사양이 낮으면 작고 가벼운 AI를 추천하며, 이 경우 긴 문서 분석 품질은 제한될 수 있습니다. 응답 속도는 컴퓨터 성능에 따라 달라집니다.</div></details>
+      <details><summary>어떤 AI 모델을 쓰나요?</summary><div class="body">공개 모델인 Qwen 3(Apache-2.0)과 Gemma 3(Gemma 이용 약관)를 컴퓨터 사양에 맞춰 추천합니다. 모델 선택과 삭제는 앱의 “내 AI 모델 관리”에서 할 수 있습니다.
+        <div class="chips"><span class="chip">Qwen 3</span><span class="chip">Gemma 3</span><span class="chip">AI 실행 엔진: Ollama (MIT)</span></div></div></details>
+      <details><summary>AI가 만든 결과를 그대로 써도 되나요?</summary><div class="body">AI가 만든 결과는 <b>초안</b>입니다. AI는 틀릴 수 있으므로 사용하기 전에 내용을 확인해 주세요. 특히 참고문헌, 수치, 인용문은 원문으로 확인하셔야 합니다.</div></details>
+      <details><summary>지원하지 않는 파일 형식이 있나요?</summary><div class="body">PDF, Word(.docx), PowerPoint(.pptx), 텍스트, Excel(.xlsx·.xls), CSV를 지원합니다. 한글(HWP) 파일은 아직 지원하지 않으니 PDF로 저장해서 사용해 주세요. 스캔한 이미지 PDF는 글자를 읽지 못합니다.</div></details>
+      <details><summary>제거하려면 어떻게 하나요?</summary><div class="body">Windows는 <b>설정 → 앱 → 설치된 앱</b>에서, Mac은 응용 프로그램의 앱을 휴지통으로 옮겨 제거합니다. 저장된 자료와 AI 모델까지 지우는 방법은 <a href="https://github.com/philosophyAIEDU/261110philosophylocalai/blob/main/docs/USER_GUIDE.md" rel="noopener">사용 설명서</a>에 있습니다.</div></details>
+      <details><summary>문제가 생기거나 의견이 있어요</summary><div class="body"><a href="https://github.com/philosophyAIEDU/261110philosophylocalai/issues" rel="noopener">GitHub 이슈</a>에 증상과 운영체제를 알려 주세요. 문서 내용이나 개인정보는 올리지 마세요.</div></details>
+    </section>
+  </main>
+
+  <footer>
+    <p><b>필로소피 로컬 AI (Philosophy Local AI)</b> — AI로 성장하고, 그 성장을 나눈다.</p>
+    <p>MIT 라이선스 · 소스코드와 문서: <a href="https://github.com/philosophyAIEDU/261110philosophylocalai" rel="noopener">GitHub</a> · <a href="https://github.com/philosophyAIEDU/261110philosophylocalai/blob/main/docs/LICENSES.md" rel="noopener">라이선스 목록</a></p>
+    <p>이 페이지는 사용 기록이나 방문자 정보를 수집하지 않으며, 외부 스크립트를 사용하지 않습니다.</p>
+  </footer>
+</div>
+</body>
+</html>
