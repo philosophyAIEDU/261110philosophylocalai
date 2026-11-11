@@ -19,10 +19,44 @@ export default function Home() {
 
   return (
     <div>
-      <section className="mb-8 rounded-3xl bg-navy px-9 py-9 text-on-primary">
-        <p className="mb-2 text-[13px] font-semibold tracking-wide opacity-80">AI로 성장하고, 그 성장을 나눈다</p>
+      <section className="mb-5 overflow-hidden rounded-3xl bg-navy px-9 py-9 text-on-primary">
+        <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-current/25 bg-white/10 px-3.5 py-1.5 text-[13px] font-bold tracking-wide">
+          <Icon name="lock" className="h-4 w-4" /> LOCAL AI · 내 컴퓨터 안에서만 실행되는 AI
+        </div>
         <h1 className="mb-3 text-[30px] font-bold leading-[1.3] tracking-[-0.015em]">교수님의 연구와 수업을 돕는 나만의 AI</h1>
-        <p className="max-w-[58ch] text-[15.5px] opacity-85">중요한 자료는 내 컴퓨터에서 안전하게 관리하고, AI의 도움으로 업무를 더 효율적으로 처리하세요.</p>
+        <p className="mb-5 max-w-[58ch] text-[15.5px] opacity-85">중요한 자료는 내 컴퓨터에서 안전하게 관리하고, AI의 도움으로 업무를 더 효율적으로 처리하세요.</p>
+        <ul className="flex flex-wrap gap-x-6 gap-y-2 text-[14px] font-semibold">
+          {["인터넷 없이도 작동합니다", "자료가 외부 서버로 가지 않습니다", "클라우드 AI를 사용하지 않습니다"].map((t) => (
+            <li key={t} className="flex items-center gap-1.5"><Icon name="check" className="h-4 w-4" />{t}</li>
+          ))}
+        </ul>
+        <p className="mt-6 text-[12.5px] font-semibold tracking-wide opacity-60">AI로 성장하고, 그 성장을 나눈다</p>
+      </section>
+
+      <section className="card mb-8" aria-label="로컬 실행 확인">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="h2">지금 이 AI는 교수님 컴퓨터 안에서만 일하고 있나요?</h2>
+            <p className="sub text-[13.5px]">설정값이 아니라, 실행 중인 AI를 직접 검사한 결과입니다.</p>
+          </div>
+          <LocalBadge local={local} onClick={() => go("privacy")} />
+        </div>
+        <ul className="grid gap-3 sm:grid-cols-3">
+          {[
+            { ok: !!local?.cloud_disabled, title: "클라우드 기능 꺼짐", desc: "인터넷 너머의 AI 서버를 쓰지 않습니다" },
+            { ok: !!local?.loopback_only, title: "외부 접속 차단", desc: "다른 컴퓨터에서 이 AI에 접속할 수 없습니다" },
+            { ok: !!local?.model_local, title: "AI가 이 컴퓨터에 있음", desc: "선택한 AI 모델이 이 컴퓨터에 저장되어 있습니다" },
+          ].map((c) => (
+            <li key={c.title} className={`rounded-xl border px-4 py-3 ${c.ok ? "border-ok/30 bg-ok-soft" : "border-border bg-surface-2"}`}>
+              <div className="flex items-center gap-2 font-bold">
+                <Icon name={c.ok ? "check" : "info"} className={`h-[18px] w-[18px] ${c.ok ? "text-ok" : "text-muted"}`} />
+                {c.title}
+              </div>
+              <div className="mt-0.5 text-[13px] text-muted">{c.desc}</div>
+              <div className={`mt-1 text-[12.5px] font-semibold ${c.ok ? "text-ok" : "text-muted"}`}>{c.ok ? "확인됨" : "아직 확인 전"}</div>
+            </li>
+          ))}
+        </ul>
       </section>
 
       <NeedModel />
