@@ -6,6 +6,11 @@ on:
     tags: ["v*"]
   pull_request:
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "사전 출시로 게시할 버전 태그 (예: v0.1.0-beta.1). 비워 두면 빌드만 합니다."
+        required: false
+        default: ""
 
 permissions:
   contents: read
@@ -63,7 +68,7 @@ jobs:
 
   release:
     # 태그(v*)를 푸시했을 때만: 테스트·보안 검사·두 운영체제 빌드가 모두 성공한 뒤 사전 출시로 게시
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: startsWith(github.ref, 'refs/tags/v') || inputs.release_tag != ''
     needs: bundle
     runs-on: ubuntu-24.04
     permissions:
@@ -80,6 +85,15 @@ jobs:
           mapfile -t files < <(find release-files -type f \( -name '*.exe' -o -name '*.dmg' \))
           printf '%s\n' "${files[@]}"
           [ "${#files[@]}" -ge 2 ] || { echo "설치 파일이 부족합니다"; exit 1; }
-          notes="docs/RELEASE_NOTES_${GITHUB_REF_NAME}.md"
-          gh release create "$GITHUB_REF_NAME" "${files[@]}" \
-            --prerelease --title "필로소피 로컬 AI ${GITHUB_REF_NAME} (시험판)" --notes-file "$notes"
+          TAG="${{ inputs.release_tag }}"
+          [ -n "$TAG" ] || TAG="$GITHUB_REF_NAME"
+          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]] || { echo "태그 형식 오류: $TAG"; exit 1; }
+          notes="docs/RELEASE_NOTES_${TAG}.md"
+          [ -f "$notes" ] || { echo "릴리스 노트가 없습니다: $notes"; exit 1; }
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "${files[@]}" --clobber
+            gh release edit "$TAG" --prerelease --notes-file "$notes"
+          else
+            gh release create "$TAG" "${files[@]}" --target "$GITHUB_SHA" \
+              --prerelease --title "필로소피 로컬 AI ${TAG} (시험판)" --notes-file "$notes"
+          fi
