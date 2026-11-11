@@ -2,7 +2,7 @@
 - [x] engine-manifest.json에 SHA-256 등록 (`node scripts/pin-engine.mjs`) — v0.40.16
 - [x] 실제 Ollama 엔진 설치·무결성·클라우드 차단·루프백 바인딩 검증 (Linux)
 - [x] 오프라인·연결 감사 보안 스크립트 통과 (Linux)
-- [x] CI에서 Windows NSIS / macOS DMG 빌드 구성 (결과는 TEST_RESULTS.md)
+- [x] CI에서 Windows NSIS / macOS universal DMG 빌드 성공, 각 OS 단위 테스트 통과
 - [ ] 실제 모델 내려받기·오프라인 채팅·PDF·Excel 보고서 (모델 저장소 접근 가능한 환경)
 - [ ] 카탈로그 모델 태그 실존 확인 (`gemma3:*`, `qwen3:*`)
 - [ ] Windows 10/11 설치·실행·강제 종료·제거 실기 테스트 (SmartScreen 안내 확인)

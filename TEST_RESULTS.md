@@ -19,8 +19,9 @@
 ### macOS (GitHub Actions macos-latest, Apple 칩) — 단위 테스트 통과
 `cargo test -p pla-core --lib` — 실제 macOS에서 하드웨어 진단(`system_profiler`), 키체인 코드 컴파일, 저장소·추출·통계 테스트 통과
 
-### Windows (GitHub Actions windows-latest)
-결과는 아래 4절 참조.
+### Windows (GitHub Actions windows-latest) — 단위 테스트 통과
+`cargo test -p pla-core --lib` 56개 통과. 첫 실행에서 **실제 버그 1건 발견·수정**:
+Windows 경로(`\\?\D:\…`)와 디스크 마운트 지점 비교 실패로 저장 공간 표시·공간 부족 검사가 동작하지 않던 문제 (커밋 40c6680).
 
 ## 2. 실제 Ollama 엔진 검증 (Linux, v0.40.16 공식 배포 파일) — 통과
 - 1,545,767,640 바이트 내려받기 → 공식 SHA-256 일치 → 설치 (약 90초)
@@ -35,8 +36,15 @@
   개인정보 화면에 "클라우드 꺼짐·내부 전용 확인됨", 모델 없음 → '로컬 전용' 배지 미확인(의도대로), 창 닫으면 엔진 종료
 - 릴리스 바이너리에 개발용 훅(`PLA_DEV_ENGINE_BIN`)·미리보기 코드 없음 확인
 
-## 4. CI 설치 파일 빌드
-(아래에 결과 기록)
+## 4. CI 설치 파일 빌드 — 성공 (서명 없음)
+| 플랫폼 | 산출물 | 크기(압축) | CI 실행 |
+|---|---|---|---|
+| Windows x64 | NSIS 설치 파일 `installer-windows-latest` | 6.8MB | run #4 (커밋 40c6680) |
+| macOS (Apple 칩 + Intel, universal) | DMG `installer-macos-latest` | 18.0MB | run #2 (커밋 37676fd) |
+| Linux | `.deb` (로컬 빌드, 참고용) | 8.6MB | — |
+
+산출물은 GitHub Actions 실행 페이지에서 내려받을 수 있습니다 (보관 기간 90일).
+**설치·실행은 실기에서 아직 확인하지 않았습니다.**
 
 ## 5. 수동 확인 (브라우저 미리보기, 예시 데이터)
 온보딩 4단계, 9개 메뉴, 다크 모드, 960×640 최소 창 — 콘솔 오류 없음
