@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
-import { AppStatus, LocalOnlyReport, call, errMsg, isTauri } from "./lib/api";
+import { AppStatus, LocalOnlyReport, call, errMsg, isTauri, on } from "./lib/api";
 import { Icon } from "./lib/ui";
 import Onboarding from "./pages/Onboarding";
 import Home from "./pages/Home";
@@ -9,8 +9,10 @@ import Students from "./pages/Students";
 import DataPage from "./pages/DataPage";
 import Models from "./pages/Models";
 import Privacy from "./pages/Privacy";
+import LockScreen from "./pages/Lock";
+import UpdatePage from "./pages/Update";
 
-export type Page = "home" | "chat" | "lecture" | "student" | "research" | "admin" | "data" | "models" | "privacy";
+export type Page = "home" | "chat" | "lecture" | "student" | "research" | "admin" | "data" | "models" | "privacy" | "update";
 
 interface Ctx {
   status: AppStatus;
@@ -31,6 +33,7 @@ const MENU: { id: Page; label: string; icon: string }[] = [
   { id: "data", label: "Excel 데이터 분석", icon: "table" },
   { id: "models", label: "내 AI 모델 관리", icon: "cpu" },
   { id: "privacy", label: "개인정보 보호 설정", icon: "shield" },
+  { id: "update", label: "앱 업데이트", icon: "download" },
 ];
 
 function useTheme() {
@@ -82,6 +85,21 @@ export default function App() {
 
   useEffect(() => { void refresh(); }, [refresh]);
 
+  // 자동 잠금: 앱이 잠겼다는 알림을 받으면 잠금 화면으로 전환
+  useEffect(() => {
+    const sub = on("app-locked", () => { setStatus((s) => (s ? { ...s, locked: true } : s)); });
+    return () => { sub.then((un) => un()); };
+  }, []);
+
+  // 키보드·마우스 사용을 앱에 알려 자동 잠금 시간을 늦춘다 (30초에 한 번만)
+  useEffect(() => {
+    let last = 0;
+    const ping = () => { const now = Date.now(); if (now - last > 30_000) { last = now; void call("user_activity").catch(() => {}); } };
+    const evs = ["mousemove", "keydown", "mousedown", "wheel", "touchstart"] as const;
+    evs.forEach((e) => window.addEventListener(e, ping, { passive: true }));
+    return () => evs.forEach((e) => window.removeEventListener(e, ping));
+  }, []);
+
   if (fatal) {
     return (
       <div className="flex h-full items-center justify-center p-10">
@@ -94,6 +112,8 @@ export default function App() {
     );
   }
   if (!status) return <div className="flex h-full items-center justify-center text-muted">불러오는 중…</div>;
+
+  if (status.locked) return <LockScreen onUnlocked={() => { setPage("home"); void refresh(); }} />;
 
   const ctx: Ctx = { status, local, refresh, go: setPage };
 
@@ -131,6 +151,15 @@ export default function App() {
             ))}
           </ul>
           <div className="space-y-2 px-2">
+            {status.has_passcode ? (
+              <button className="btn-ghost btn-sm w-full" onClick={async () => { try { await call("lock_app"); } catch { /* 무시 */ } }} title="자리를 비울 때 눌러 주세요">
+                <Icon name="lock" className="h-4 w-4" /> 지금 잠그기
+              </button>
+            ) : (
+              <button className="chip bg-warn-soft text-warn" onClick={() => setPage("privacy")} title="학생 정보를 다룬다면 잠금 암호를 설정해 주세요">
+                <Icon name="alert" className="h-3.5 w-3.5" /> 앱 잠금 꺼짐
+              </button>
+            )}
             <LocalBadge local={local} onClick={() => setPage("privacy")} />
             <div className="flex items-center justify-between">
               <span className="text-[11.5px] text-muted">버전 {status.app_version}</span>
@@ -154,6 +183,7 @@ export default function App() {
               {page === "data" && <DataPage />}
               {page === "models" && <Models />}
               {page === "privacy" && <Privacy />}
+              {page === "update" && <UpdatePage />}
             </div>
           )}
         </main>

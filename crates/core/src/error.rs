@@ -24,6 +24,12 @@ pub enum AppError {
     Storage(String),
     #[error("작업이 취소되었습니다")]
     Cancelled,
+    #[error("앱이 잠겨 있습니다. 잠금 암호를 입력해 주세요")]
+    Locked,
+    #[error("잠금 암호가 맞지 않습니다")]
+    WrongPasscode,
+    #[error("잠금 암호를 여러 번 틀렸습니다. {0}")]
+    Throttled(String),
     #[error("{0}")]
     Other(String),
 }
@@ -42,6 +48,9 @@ impl AppError {
             AppError::DiskSpace(_) => "disk_space",
             AppError::Storage(_) => "storage",
             AppError::Cancelled => "cancelled",
+            AppError::Locked => "locked",
+            AppError::WrongPasscode => "wrong_passcode",
+            AppError::Throttled(_) => "throttled",
             AppError::Other(_) => "other",
         }
     }

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { PrivacyInfo, call, errMsg, fmtBytes } from "../lib/api";
 import { Confirm, ErrorNotice, Icon, Notice, PageHeader } from "../lib/ui";
 import { useApp } from "../App";
+import SecurityPanel from "./SecurityPanel";
 
 function Toggle({ checked, onChange, label, desc }: { checked: boolean; onChange: (v: boolean) => void; label: string; desc: string }) {
   return (
@@ -17,7 +18,7 @@ function Toggle({ checked, onChange, label, desc }: { checked: boolean; onChange
 }
 
 export default function Privacy() {
-  const { local, refresh } = useApp();
+  const { local, refresh, status } = useApp();
   const [info, setInfo] = useState<PrivacyInfo | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [confirm, setConfirm] = useState<"conversations" | "all" | null>(null);
@@ -35,6 +36,7 @@ export default function Privacy() {
   return (
     <div className="space-y-6">
       <PageHeader title="개인정보 보호 설정" sub="교수님의 자료가 어디에 저장되고 어떻게 보호되는지 확인하고 관리합니다." />
+      <SecurityPanel />
       <ErrorNotice error={error} onDismiss={() => setError(null)} />
       {msg && <Notice tone="ok">{msg}</Notice>}
 
@@ -81,7 +83,7 @@ export default function Privacy() {
             <dl className="grid grid-cols-[150px_1fr] gap-x-4 gap-y-2 text-[14px]">
               <dt className="text-muted">앱 자료 폴더</dt><dd className="break-all font-mono text-[13px]">{info.data_dir}</dd>
               <dt className="text-muted">AI 모델 폴더</dt><dd className="break-all font-mono text-[13px]">{info.models_dir} <span className="font-sans text-muted">({fmtBytes(info.models_bytes)})</span></dd>
-              <dt className="text-muted">암호화 키 보관</dt><dd>{info.key_store === "os_keychain" ? "운영체제 보안 저장소 (키체인 / 자격 증명 관리자)" : "앱 자료 폴더의 키 파일 (개발용 환경 — 보안 저장소보다 약함)"}</dd>
+              <dt className="text-muted">암호화 키 보관</dt><dd>{info.key_store === "os_keychain" ? "운영체제 보안 저장소 (키체인 / 자격 증명 관리자)" : "앱 자료 폴더의 키 파일 (개발용 환경 — 보안 저장소보다 약함)"}{status.has_passcode ? " + 앱 잠금 암호로 한 번 더 보호" : ""}</dd>
               <dt className="text-muted">저장된 대화</dt><dd className="tabular-nums">{info.stats.conversations}개 (메시지 {info.stats.messages}개)</dd>
               <dt className="text-muted">상담 기록</dt><dd className="tabular-nums">{info.stats.student_notes}개</dd>
               <dt className="text-muted">지금 불러온 파일</dt><dd className="tabular-nums">{info.loaded_documents}개 <span className="text-muted">(메모리에만 있으며 화면을 떠나거나 앱을 닫으면 사라집니다)</span></dd>

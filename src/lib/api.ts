@@ -2,7 +2,6 @@
 // 웹뷰는 네트워크에 직접 접근하지 않는다. 모든 기능은 Tauri 명령(IPC)으로만 호출한다.
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { open, save } from "@tauri-apps/plugin-dialog";
 
 export const isTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
@@ -32,6 +31,21 @@ export interface EngineStatus { installed: boolean; version: string; running: bo
 export interface AppStatus {
   app_version: string; engine: EngineStatus; engine_name: string; selected_model: string | null;
   onboarding_done: boolean; download_consent: boolean; save_history: boolean; purpose: Purpose;
+  locked: boolean; has_passcode: boolean; auto_lock_minutes: number; screen_protection: boolean;
+  pseudonymize_students: boolean; update_consent: boolean; include_prerelease: boolean;
+}
+export type DiskEncryption = "on" | "off" | "in_progress" | "unknown";
+export interface SecurityCheckup {
+  disk_encryption: DiskEncryption; key_store: "os_keychain" | "key_file"; has_passcode: boolean; auto_lock_minutes: number;
+  screen_protection: boolean; screen_protection_supported: boolean; save_history: boolean; pseudonymize_students: boolean;
+  download_consent: boolean; update_consent: boolean;
+}
+export interface Alias { alias: string; original: string }
+export interface InstallerAsset { name: string; size: number; url: string; sha256: string }
+export interface UpdateInfo {
+  current_version: string; latest_version: string | null; update_available: boolean; is_prerelease: boolean;
+  title: string | null; notes: string | null; published_at: string | null; release_url: string;
+  asset: InstallerAsset | null; asset_note: string | null;
 }
 export interface InstalledModel { name: string; size_bytes: number; modified_at: string; parameter_size: string | null; quantization: string | null; is_remote: boolean }
 export interface Progress { stage: string; total_bytes: number; completed_bytes: number; verifying?: boolean; done: boolean }
@@ -52,28 +66,22 @@ export interface GroupSpec { group_column: string; value_column: string | null; 
 export interface GroupResult { group_column: string; value_column: string | null; agg: Agg; rows: { group: string; count: number; value: number | null }[]; skipped: number }
 export interface AuditEntry { at: string; purpose: string; host: string; detail: string; allowed: boolean }
 export interface PrivacyInfo {
-  data_dir: string; database_path: string; models_dir: string; key_store: "os_keychain" | "key_file" | "memory";
+  data_dir: string; database_path: string; models_dir: string; key_store: "os_keychain" | "key_file";
   save_history: boolean; download_consent: boolean; stats: { conversations: number; messages: number; student_notes: number; db_bytes: number };
   audit_log: AuditEntry[]; loaded_documents: number; disk_free: number; models_bytes: number;
 }
 
 // ---- 호출 ----
+// 화면은 파일 경로를 다루지 않는다. 파일 열기·저장은 앱(Rust)이 운영체제 대화상자를 직접 띄운다.
 type Listener = (payload: any) => void;
 interface Backend {
   call<T>(cmd: string, args?: Record<string, unknown>): Promise<T>;
   on(event: string, cb: Listener): Promise<() => void>;
-  pickFile(name: string, extensions: string[]): Promise<string | null>;
-  pickSave(defaultName: string, name: string, extensions: string[]): Promise<string | null>;
 }
 
 const tauriBackend: Backend = {
   call: (cmd, args) => invoke(cmd, args),
   on: async (event, cb) => listen(event, (e) => cb(e.payload)),
-  pickFile: async (name, extensions) => {
-    const r = await open({ multiple: false, directory: false, filters: [{ name, extensions }] });
-    return typeof r === "string" ? r : null;
-  },
-  pickSave: async (defaultName, name, extensions) => (await save({ defaultPath: defaultName, filters: [{ name, extensions }] })) ?? null,
 };
 
 let backend: Backend = tauriBackend;
@@ -85,8 +93,6 @@ export type { Backend };
 
 export const call = <T,>(cmd: string, args?: Record<string, unknown>) => backend.call<T>(cmd, args);
 export const on = (event: string, cb: Listener) => backend.on(event, cb);
-export const pickFile = (name: string, extensions: string[]) => backend.pickFile(name, extensions);
-export const pickSave = (defaultName: string, name: string, extensions: string[]) => backend.pickSave(defaultName, name, extensions);
 
 export function errMsg(e: unknown): string {
   if (e && typeof e === "object" && "message" in e) return String((e as { message: unknown }).message);

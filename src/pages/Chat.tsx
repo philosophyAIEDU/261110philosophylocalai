@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ChatMessage, ChatOutcome, ConversationMeta, InstalledModel, call, errMsg } from "../lib/api";
-import { Confirm, CopyButton, ErrorNotice, Icon, Md, useAiJob } from "../lib/ui";
+import { Confirm, CopyButton, ErrorNotice, Icon, Md, SecurityTip, useAiJob } from "../lib/ui";
 import { LocalBadge, NeedModel, useApp } from "../App";
 
 const STARTERS = ["다음 주 수업 도입부에 쓸 질문 세 가지를 제안해 주세요.", "학생에게 보낼 과제 안내문 초안을 정중한 문체로 써 주세요.", "연구계획서의 '연구 필요성' 문단을 쓰는 요령을 알려 주세요."];
@@ -84,7 +84,8 @@ export default function Chat() {
             {messages.length === 0 && !job.running && (
               <div className="pt-10 text-center">
                 <h1 className="h1 mb-2">무엇을 도와드릴까요?</h1>
-                <p className="sub mb-6">이 대화는 교수님의 컴퓨터 안에서만 처리됩니다.</p>
+                <p className="sub mb-4">이 대화는 교수님의 컴퓨터 안에서만 처리됩니다.</p>
+                <div className="mx-auto mb-6 max-w-[560px] text-left"><SecurityTip>학생 이름·학번·연락처는 꼭 필요할 때만 입력해 주세요. {status.save_history ? (status.has_passcode ? "대화는 암호화되어 저장되고, 앱 잠금으로 보호됩니다." : "대화 기록 저장이 켜져 있지만 앱 잠금이 없습니다. ‘개인정보 보호 설정’에서 잠금 암호를 설정해 주세요.") : "대화 기록 저장이 꺼져 있어 창을 닫으면 대화가 사라집니다."}</SecurityTip></div>
                 <div className="mx-auto grid max-w-[560px] gap-2">
                   {STARTERS.map((s) => <button key={s} className="card py-3 text-left text-[14px] hover:border-purple/50" disabled={!ready} onClick={() => send(s)}>{s}</button>)}
                 </div>

@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import { HardwareReport, Purpose, Recommendation, RecommendationResult, call, errMsg } from "../lib/api";
-import { ErrorNotice, Icon, Notice } from "../lib/ui";
+import { ErrorNotice, Icon, Notice, SecurityTip } from "../lib/ui";
 import { HardwareSummary, RecommendationCard, ReasonList } from "../lib/modelcard";
 import { DownloadFlow } from "../lib/download";
 import { useApp } from "../App";
+import { PasscodeForm, PROFESSOR_RULES } from "./SecurityPanel";
 
 export const PURPOSES: { id: Purpose; label: string; desc: string }[] = [
   { id: "general", label: "두루 사용", desc: "대화, 글 초안, 일반 업무" },
@@ -32,8 +33,10 @@ export default function Onboarding() {
       .catch((e) => setError(errMsg(e)));
   }, [step, purpose]);
 
+  const [passSet, setPassSet] = useState(false);
   const finish = async () => { await call("complete_onboarding"); await refresh(); };
-  const titles = ["시작하기", "컴퓨터 확인", "AI 고르기", "AI 내려받기"];
+  const toSecurity = () => setStep(4);
+  const titles = ["시작하기", "컴퓨터 확인", "AI 고르기", "AI 내려받기", "안전 설정"];
 
   return (
     <div className="flex h-full flex-col overflow-y-auto">
@@ -118,7 +121,7 @@ export default function Onboarding() {
             <div className="flex items-center gap-2">
               <button className="btn-ghost" onClick={() => setStep(1)}>이전</button>
               <button className="btn-primary" disabled={!picked} onClick={() => setStep(3)}>이 AI로 계속하기</button>
-              <button className="ml-auto text-[13.5px] text-muted underline underline-offset-4" onClick={finish}>지금은 건너뛰기</button>
+              <button className="ml-auto text-[13.5px] text-muted underline underline-offset-4" onClick={toSecurity}>지금은 건너뛰기</button>
             </div>
           </div>
         )}
@@ -127,10 +130,38 @@ export default function Onboarding() {
           <div className="mx-auto max-w-[640px] pt-4">
             <h1 className="h1 mb-2">{picked.assessment.model.display_name} 준비하기</h1>
             <p className="sub mb-6">아래 버튼을 누르면 필요한 것을 모두 자동으로 내려받고 설치합니다.</p>
-            <div className="card"><DownloadFlow model={picked.assessment.model} onDone={finish} /></div>
+            <div className="card"><DownloadFlow model={picked.assessment.model} onDone={toSecurity} doneLabel="다음: 안전 설정" /></div>
             <div className="mt-4 flex items-center gap-2">
               <button className="btn-ghost" onClick={() => setStep(2)}>다른 AI 고르기</button>
-              <button className="ml-auto text-[13.5px] text-muted underline underline-offset-4" onClick={finish}>나중에 내려받기</button>
+              <button className="ml-auto text-[13.5px] text-muted underline underline-offset-4" onClick={toSecurity}>나중에 내려받기</button>
+            </div>
+          </div>
+        )}
+
+        {step === 4 && (
+          <div className="mx-auto max-w-[680px] pt-4">
+            <h1 className="h1 mb-2">마지막으로, 안전하게 쓰기 위한 설정</h1>
+            <p className="sub mb-5">학생 상담 기록처럼 민감한 정보를 다루신다면 앱 잠금 암호를 꼭 설정해 주세요. 나중에 ‘개인정보 보호 설정’에서도 바꿀 수 있습니다.</p>
+            <div className="card mb-4">
+              <div className="mb-1 flex items-center gap-2 font-bold"><Icon name="lock" className="h-5 w-5 text-purple" />앱 잠금 암호 {passSet && <span className="chip bg-ok-soft text-ok">설정됨</span>}</div>
+              <p className="text-[13.5px] text-muted">암호 없이는 저장된 대화·상담 기록을 열 수 없고, 10분 동안 사용하지 않으면 자동으로 잠깁니다.</p>
+              {!passSet && <PasscodeForm hasPasscode={false} onDone={() => { setPassSet(true); void refresh(); }} />}
+            </div>
+            <div className="card mb-4">
+              <div className="mb-2 flex items-center gap-2 font-bold"><Icon name="shield" className="h-5 w-5 text-purple" />이미 켜져 있는 보호 기능</div>
+              <ul className="space-y-1 text-[14px]">
+                <li className="flex gap-2"><Icon name="check" className="mt-1 h-4 w-4 shrink-0 text-ok" />AI가 이 컴퓨터 안에서만 실행되고, 자료가 인터넷으로 나가지 않습니다.</li>
+                <li className="flex gap-2"><Icon name="check" className="mt-1 h-4 w-4 shrink-0 text-ok" />저장되는 기록은 모두 암호화됩니다. 대화 기록 저장은 기본으로 꺼져 있습니다.</li>
+                <li className="flex gap-2"><Icon name="check" className="mt-1 h-4 w-4 shrink-0 text-ok" />화상회의 화면 공유·캡처에 이 앱 창이 나타나지 않습니다. (Windows·Mac)</li>
+                <li className="flex gap-2"><Icon name="check" className="mt-1 h-4 w-4 shrink-0 text-ok" />학생 기록을 AI에 보낼 때 이름을 ‘학생1’처럼 가명으로 바꿉니다.</li>
+              </ul>
+            </div>
+            <SecurityTip title="꼭 기억해 주세요">
+              {PROFESSOR_RULES.slice(2, 5).map((r) => r.title).join(" · ")}. 자세한 수칙은 ‘개인정보 보호 설정’ 메뉴에 있습니다.
+            </SecurityTip>
+            <div className="mt-5 flex items-center gap-2">
+              <button className="btn-primary px-6" onClick={finish}>{passSet ? "완료하고 시작하기" : "잠금 없이 시작하기"}</button>
+              {!passSet && <span className="text-[13px] text-warn">학생 정보를 다룬다면 잠금 암호를 설정하신 뒤 시작해 주세요.</span>}
             </div>
           </div>
         )}

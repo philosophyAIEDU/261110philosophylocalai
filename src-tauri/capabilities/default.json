@@ -1,11 +1,10 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "메인 창 권한 — 기본 기능과 파일 선택 대화상자만 허용",
+  "description": "메인 창 권한 — 진행 상황 이벤트 수신만 허용. 파일 선택·저장은 Rust 쪽에서 직접 대화상자를 띄우므로 화면에는 파일 권한이 없다.",
   "windows": ["main"],
   "permissions": [
-    "core:default",
-    "dialog:allow-open",
-    "dialog:allow-save"
+    "core:event:allow-listen",
+    "core:event:allow-unlisten"
   ]
 }

@@ -2,7 +2,7 @@
 import { ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { call, errCode, errMsg, newJobId, on, pickSave } from "./api";
+import { call, errCode, errMsg, newJobId, on } from "./api";
 
 export function Icon({ name, className = "h-5 w-5" }: { name: string; className?: string }) {
   const paths: Record<string, string> = {
@@ -176,26 +176,34 @@ export function CopyButton({ text }: { text: string }) {
   );
 }
 
-/** 결과 저장 버튼 (Word / 텍스트). 저장 위치는 교수님이 직접 고른다. */
+/** 보안 유의사항 한 줄 안내 */
+export function SecurityTip({ children, title }: { children: ReactNode; title?: string }) {
+  return (
+    <div className="flex gap-2.5 rounded-xl border border-purple/20 bg-purple-soft/60 px-3.5 py-2.5 text-[13.5px]" role="note">
+      <Icon name="shield" className="mt-0.5 h-[17px] w-[17px] shrink-0 text-purple" />
+      <div className="min-w-0">{title && <b className="mr-1">{title}</b>}{children}</div>
+    </div>
+  );
+}
+
+/** 결과 저장 버튼 (Word / 텍스트). 저장 위치는 앱이 띄우는 창에서 교수님이 직접 고른다. */
 export function ExportButtons({ title, markdown }: { title: string; markdown: string }) {
   const [msg, setMsg] = useState<string | null>(null);
   const saveAs = async (kind: "docx" | "md") => {
     setMsg(null);
     try {
-      const safe = title.replace(/[\\/:*?"<>|]/g, " ").trim() || "결과";
-      const path = await pickSave(`${safe}.${kind}`, kind === "docx" ? "Word 문서" : "텍스트 문서", [kind]);
-      if (!path) return;
-      if (kind === "docx") await call("export_docx", { title, markdown, path });
-      else await call("export_text", { content: markdown, path });
-      setMsg("저장했습니다.");
+      const name = await call<string | null>(kind === "docx" ? "save_docx" : "save_text", kind === "docx" ? { title, markdown } : { title, content: markdown });
+      if (name) setMsg(`'${name}'(으)로 저장했습니다. 저장한 파일은 암호화되지 않으니 보관 위치에 유의해 주세요.`);
     } catch (e) { setMsg(errMsg(e)); }
   };
   return (
-    <div className="flex flex-wrap items-center gap-2">
-      <CopyButton text={markdown} />
-      <button className="btn-ghost btn-sm" onClick={() => saveAs("docx")}><Icon name="file" className="h-4 w-4" /> Word로 저장</button>
-      <button className="btn-ghost btn-sm" onClick={() => saveAs("md")}><Icon name="download" className="h-4 w-4" /> 텍스트로 저장</button>
-      {msg && <span className="text-[13px] text-muted">{msg}</span>}
+    <div>
+      <div className="flex flex-wrap items-center gap-2">
+        <CopyButton text={markdown} />
+        <button className="btn-ghost btn-sm" onClick={() => saveAs("docx")}><Icon name="file" className="h-4 w-4" /> Word로 저장</button>
+        <button className="btn-ghost btn-sm" onClick={() => saveAs("md")}><Icon name="download" className="h-4 w-4" /> 텍스트로 저장</button>
+      </div>
+      {msg && <p className="mt-2 text-[13px] text-muted">{msg}</p>}
     </div>
   );
 }
@@ -220,7 +228,7 @@ export function ResultCard({ title, job, footer }: { title: string; job: ReturnT
       {!job.running && job.text && (
         <div className="mt-4 border-t border-border pt-4">
           <ExportButtons title={title} markdown={job.text} />
-          <p className="mt-3 text-[12.5px] text-muted">AI가 만든 초안입니다. 사용하기 전에 내용을 확인해 주세요.</p>
+          <p className="mt-3 text-[12.5px] text-muted">AI가 만든 초안입니다. 사용하기 전에 내용을 확인해 주세요. 저장하거나 복사한 내용은 이 앱의 보호(암호화) 밖으로 나가므로, 개인정보가 들어 있다면 학교 규정에 맞는 곳에만 보관해 주세요.</p>
           {footer}
         </div>
       )}
