@@ -34,8 +34,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          windows=release-files/Philosophy.Local.AI_0.2.1_x64-setup.exe
-          mac=release-files/Philosophy.Local.AI_0.2.1_universal.dmg
+          windows=$(find release-files -type f -name Philosophy.Local.AI_0.2.1_x64-setup.exe)
+          mac=$(find release-files -type f -name Philosophy.Local.AI_0.2.1_universal.dmg)
           test -s "$windows"
           test -s "$mac"
           sha256sum "$windows" "$mac"
