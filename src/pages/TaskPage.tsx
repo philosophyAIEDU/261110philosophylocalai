@@ -1,13 +1,13 @@
 // 강의자료 분석 / 연구자료 분석 / 행정업무 도우미 — 같은 화면 구성을 쓴다.
 import { useEffect, useState } from "react";
-import { ChatMessage, ChatOutcome, Chunk, DocInfo, TaskDef, call, errMsg, pickFile } from "../lib/api";
-import { Empty, ErrorNotice, Icon, Md, Notice, PageHeader, ResultCard, useAiJob } from "../lib/ui";
+import { ChatMessage, ChatOutcome, Chunk, DocInfo, TaskDef, call, errMsg } from "../lib/api";
+import { Empty, ErrorNotice, Icon, Md, Notice, PageHeader, ResultCard, SecurityTip, useAiJob } from "../lib/ui";
 import { NeedModel, useApp } from "../App";
 
-const META: Record<string, { title: string; sub: string; pasteLabel: string; pastePlaceholder: string; qa: boolean; note?: string }> = {
-  lecture: { title: "강의자료 분석", sub: "강의자료를 불러와 요약, 핵심 개념, 수업 목표, 토론 질문, 퀴즈 초안을 만듭니다.", pasteLabel: "또는 내용을 직접 붙여 넣기", pastePlaceholder: "강의 노트나 자료 내용을 붙여 넣으세요", qa: true },
-  research: { title: "연구자료 분석", sub: "논문과 연구자료를 요약·비교하고, 주제별로 정리합니다.", pasteLabel: "또는 내용을 직접 붙여 넣기", pastePlaceholder: "초록이나 메모를 붙여 넣으세요", qa: true, note: "AI는 자료에 없는 참고문헌이나 연구 결과를 만들어 내지 않도록 설정되어 있지만, 인용 전에는 반드시 원문을 확인해 주세요." },
-  admin: { title: "행정업무 도우미", sub: "회의 메모나 자료를 바탕으로 회의록, 보고서, 공문 초안을 작성합니다.", pasteLabel: "메모·내용 입력", pastePlaceholder: "회의 메모, 행사 내용, 전달할 사항 등을 적어 주세요", qa: false },
+const META: Record<string, { title: string; sub: string; pasteLabel: string; pastePlaceholder: string; qa: boolean; note?: string; tip: string }> = {
+  lecture: { title: "강의자료 분석", sub: "강의자료를 불러와 요약, 핵심 개념, 수업 목표, 토론 질문, 퀴즈 초안을 만듭니다.", pasteLabel: "또는 내용을 직접 붙여 넣기", pastePlaceholder: "강의 노트나 자료 내용을 붙여 넣으세요", qa: true, tip: "불러온 파일은 이 컴퓨터의 메모리에서만 읽고 복사본을 만들지 않으며, 다른 메뉴로 이동하거나 앱이 잠기면 지워집니다. 학생 이름이 들어간 자료는 꼭 필요한 부분만 불러와 주세요." },
+  research: { title: "연구자료 분석", sub: "논문과 연구자료를 요약·비교하고, 주제별로 정리합니다.", pasteLabel: "또는 내용을 직접 붙여 넣기", pastePlaceholder: "초록이나 메모를 붙여 넣으세요", qa: true, note: "AI는 자료에 없는 참고문헌이나 연구 결과를 만들어 내지 않도록 설정되어 있지만, 인용 전에는 반드시 원문을 확인해 주세요.", tip: "미발표 연구자료도 이 컴퓨터 밖으로 나가지 않습니다. 다만 결과를 Word로 저장하거나 복사하면 그 파일은 암호화되지 않으니, 공유 폴더·메신저로 옮길 때 주의해 주세요." },
+  admin: { title: "행정업무 도우미", sub: "회의 메모나 자료를 바탕으로 회의록, 보고서, 공문 초안을 작성합니다.", pasteLabel: "메모·내용 입력", pastePlaceholder: "회의 메모, 행사 내용, 전달할 사항 등을 적어 주세요", qa: false, tip: "공문·보고서 초안에 들어간 개인정보(연락처, 학번 등)는 실제 문서로 보내기 전에 꼭 필요한지 다시 확인해 주세요. 저장한 파일은 암호화되지 않습니다." },
 };
 
 export default function TaskPage({ category }: { category: "lecture" | "research" | "admin" }) {
@@ -34,10 +34,8 @@ export default function TaskPage({ category }: { category: "lecture" | "research
 
   const addFile = async () => {
     setError(null);
-    const path = await pickFile("문서", ["pdf", "docx", "pptx", "txt", "md"]);
-    if (!path) return;
     setLoading(true);
-    try { const d = await call<DocInfo>("load_document", { path }); setDocs((x) => [...x, d]); }
+    try { const d = await call<DocInfo | null>("pick_document"); if (d) setDocs((x) => [...x, d]); }
     catch (e) { setError(errMsg(e)); }
     setLoading(false);
   };
@@ -64,6 +62,7 @@ export default function TaskPage({ category }: { category: "lecture" | "research
       <PageHeader title={meta.title} sub={meta.sub} />
       <NeedModel />
       {meta.note && <Notice tone="info">{meta.note}</Notice>}
+      <SecurityTip title="보안 유의사항">{meta.tip}</SecurityTip>
 
       <section className="card">
         <div className="mb-3 flex items-center justify-between">

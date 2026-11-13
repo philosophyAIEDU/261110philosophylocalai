@@ -8,11 +8,12 @@ use crate::security::crypto::Cipher;
 use rusqlite::{params, Connection, OptionalExtension};
 use serde::Serialize;
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
+use std::sync::{Mutex, RwLock};
 
 pub struct Store {
     conn: Mutex<Connection>,
-    cipher: Cipher,
+    /// 잠겨 있으면 None. 잠금 시 키를 메모리에서 지운다.
+    cipher: RwLock<Option<Cipher>>,
     path: PathBuf,
 }
 
@@ -53,6 +54,13 @@ fn now() -> String {
 
 impl Store {
     pub fn open(path: &Path, cipher: Cipher) -> AppResult<Self> {
+        let s = Self::open_locked(path)?;
+        s.unlock(cipher);
+        Ok(s)
+    }
+
+    /// 키 없이(잠긴 상태로) 연다. 설정값만 읽고 쓸 수 있다.
+    pub fn open_locked(path: &Path) -> AppResult<Self> {
         if let Some(p) = path.parent() {
             std::fs::create_dir_all(p)?;
         }
@@ -60,6 +68,7 @@ impl Store {
         conn.execute_batch(
             "PRAGMA secure_delete = ON;
              PRAGMA journal_mode = DELETE;
+             PRAGMA temp_store = MEMORY;
              PRAGMA foreign_keys = ON;
              CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
              CREATE TABLE IF NOT EXISTS conversations (
@@ -79,7 +88,45 @@ impl Store {
             use std::os::unix::fs::PermissionsExt;
             let _ = std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600));
         }
-        Ok(Self { conn: Mutex::new(conn), cipher, path: path.to_path_buf() })
+        Ok(Self { conn: Mutex::new(conn), cipher: RwLock::new(None), path: path.to_path_buf() })
+    }
+
+    pub fn unlock(&self, cipher: Cipher) {
+        *self.cipher.write().unwrap() = Some(cipher);
+    }
+
+    /// 키를 메모리에서 지운다. 이후 암호화된 자료는 잠금 해제 전까지 읽을 수 없다.
+    pub fn lock(&self) {
+        *self.cipher.write().unwrap() = None;
+    }
+
+    pub fn is_locked(&self) -> bool {
+        self.cipher.read().unwrap().is_none()
+    }
+
+    /// 현재 키 (앱 잠금 암호 설정 시 감싸기 위해 사용).
+    pub fn current_cipher(&self) -> AppResult<Cipher> {
+        self.cipher.read().unwrap().clone().ok_or(AppError::Locked)
+    }
+
+    fn ensure_unlocked(&self) -> AppResult<()> {
+        if self.is_locked() { Err(AppError::Locked) } else { Ok(()) }
+    }
+
+    fn enc(&self, s: &str) -> AppResult<String> {
+        self.current_cipher()?.encrypt(s)
+    }
+
+    fn dec(&self, s: &str) -> AppResult<String> {
+        self.current_cipher()?.decrypt(s)
+    }
+
+    /// 설정을 포함한 모든 기록을 지우고 파일을 정리한다 (전체 초기화용).
+    /// 키 파기와 함께 쓰면, 이전에 만들어진 백업 사본도 읽을 수 없게 된다(암호학적 삭제).
+    pub fn erase_all(&self) -> AppResult<()> {
+        let c = self.conn.lock().unwrap();
+        c.execute_batch("DELETE FROM messages; DELETE FROM conversations; DELETE FROM student_notes; DELETE FROM settings; VACUUM;")?;
+        Ok(())
     }
 
     pub fn path(&self) -> &Path {
@@ -109,14 +156,14 @@ impl Store {
         let c = self.conn.lock().unwrap();
         c.execute(
             "INSERT INTO conversations(id, kind, title_enc, created_at, updated_at) VALUES(?1, ?2, ?3, ?4, ?4)",
-            params![id, kind, self.cipher.encrypt(title)?, t],
+            params![id, kind, self.enc(title)?, t],
         )?;
         Ok(id)
     }
 
     pub fn rename_conversation(&self, id: &str, title: &str) -> AppResult<()> {
         let c = self.conn.lock().unwrap();
-        c.execute("UPDATE conversations SET title_enc = ?2 WHERE id = ?1", params![id, self.cipher.encrypt(title)?])?;
+        c.execute("UPDATE conversations SET title_enc = ?2 WHERE id = ?1", params![id, self.enc(title)?])?;
         Ok(())
     }
 
@@ -125,7 +172,7 @@ impl Store {
         let c = self.conn.lock().unwrap();
         let n = c.execute(
             "INSERT INTO messages(conversation_id, role, content_enc, created_at) VALUES(?1, ?2, ?3, ?4)",
-            params![conversation_id, role, self.cipher.encrypt(content)?, t],
+            params![conversation_id, role, self.enc(content)?, t],
         )?;
         if n == 0 {
             return Err(AppError::Storage("대화를 찾을 수 없습니다".into()));
@@ -135,30 +182,33 @@ impl Store {
     }
 
     pub fn list_conversations(&self, kind: Option<&str>) -> AppResult<Vec<ConversationMeta>> {
+        self.ensure_unlocked()?;
         let c = self.conn.lock().unwrap();
         let mut st = c.prepare("SELECT id, kind, title_enc, updated_at FROM conversations WHERE (?1 IS NULL OR kind = ?1) ORDER BY updated_at DESC, rowid DESC")?;
         let rows = st.query_map([kind], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?, r.get::<_, String>(2)?, r.get::<_, String>(3)?)))?;
         let mut out = Vec::new();
         for row in rows {
             let (id, kind, title_enc, updated_at) = row?;
-            out.push(ConversationMeta { id, kind, title: self.cipher.decrypt(&title_enc)?, updated_at });
+            out.push(ConversationMeta { id, kind, title: self.dec(&title_enc)?, updated_at });
         }
         Ok(out)
     }
 
     pub fn get_messages(&self, conversation_id: &str) -> AppResult<Vec<StoredMessage>> {
+        self.ensure_unlocked()?;
         let c = self.conn.lock().unwrap();
         let mut st = c.prepare("SELECT role, content_enc, created_at FROM messages WHERE conversation_id = ?1 ORDER BY id")?;
         let rows = st.query_map([conversation_id], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?, r.get::<_, String>(2)?)))?;
         let mut out = Vec::new();
         for row in rows {
             let (role, enc, created_at) = row?;
-            out.push(StoredMessage { role, content: self.cipher.decrypt(&enc)?, created_at });
+            out.push(StoredMessage { role, content: self.dec(&enc)?, created_at });
         }
         Ok(out)
     }
 
     pub fn delete_conversation(&self, id: &str) -> AppResult<()> {
+        self.ensure_unlocked()?;
         let c = self.conn.lock().unwrap();
         c.execute("DELETE FROM conversations WHERE id = ?1", [id])?;
         Ok(())
@@ -170,7 +220,7 @@ impl Store {
         let c = self.conn.lock().unwrap();
         c.execute(
             "INSERT INTO student_notes(id, student_enc, date, content_enc, created_at) VALUES(?1, ?2, ?3, ?4, ?5)",
-            params![id, self.cipher.encrypt(student)?, date, self.cipher.encrypt(content)?, now()],
+            params![id, self.enc(student)?, date, self.enc(content)?, now()],
         )?;
         Ok(id)
     }
@@ -178,6 +228,7 @@ impl Store {
     /// 상담 기록을 불러온다. `query`가 있으면 학생 이름·내용에서 검색한다
     /// (복호화는 메모리에서만 이루어지며 검색 색인을 디스크에 만들지 않는다).
     pub fn list_student_notes(&self, query: Option<&str>) -> AppResult<Vec<StudentNote>> {
+        self.ensure_unlocked()?;
         let c = self.conn.lock().unwrap();
         let mut st = c.prepare("SELECT id, student_enc, date, content_enc FROM student_notes ORDER BY date DESC, created_at DESC")?;
         let rows = st.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?, r.get::<_, String>(2)?, r.get::<_, String>(3)?)))?;
@@ -185,7 +236,7 @@ impl Store {
         let mut out = Vec::new();
         for row in rows {
             let (id, s_enc, date, c_enc) = row?;
-            let note = StudentNote { id, student: self.cipher.decrypt(&s_enc)?, date, content: self.cipher.decrypt(&c_enc)? };
+            let note = StudentNote { id, student: self.dec(&s_enc)?, date, content: self.dec(&c_enc)? };
             if let Some(q) = &q {
                 if !note.student.to_lowercase().contains(q) && !note.content.to_lowercase().contains(q) {
                     continue;
@@ -197,6 +248,7 @@ impl Store {
     }
 
     pub fn delete_student_note(&self, id: &str) -> AppResult<()> {
+        self.ensure_unlocked()?;
         let c = self.conn.lock().unwrap();
         c.execute("DELETE FROM student_notes WHERE id = ?1", [id])?;
         Ok(())
@@ -303,6 +355,33 @@ mod tests {
         let id = s.list_student_notes(Some("박준호")).unwrap()[0].id.clone();
         s.delete_student_note(&id).unwrap();
         assert_eq!(s.stats().unwrap().student_notes, 1);
+    }
+
+    #[test]
+    fn locked_store_refuses_sensitive_data_but_allows_settings() {
+        let (_d, s) = store();
+        s.create_conversation("chat", "상담").unwrap();
+        let key = s.current_cipher().unwrap();
+        s.lock();
+        assert!(s.is_locked());
+        assert!(matches!(s.list_conversations(None), Err(AppError::Locked)));
+        assert!(matches!(s.add_student_note("a", "2026-01-01", "b"), Err(AppError::Locked)));
+        assert!(matches!(s.list_student_notes(None), Err(AppError::Locked)));
+        s.set_setting("k", "v").unwrap();
+        assert_eq!(s.get_setting("k").unwrap().as_deref(), Some("v"));
+        s.unlock(key);
+        assert_eq!(s.list_conversations(None).unwrap().len(), 1);
+    }
+
+    #[test]
+    fn erase_all_with_new_key_leaves_nothing_readable() {
+        let (_d, s) = store();
+        s.add_student_note("김학생", "2026-01-01", "ERASE-CANARY").unwrap();
+        s.set_setting("onboarding_done", "true").unwrap();
+        s.erase_all().unwrap();
+        assert_eq!(s.stats().unwrap().student_notes, 0);
+        assert!(s.get_setting("onboarding_done").unwrap().is_none());
+        assert!(!file_contains(s.path(), "ERASE-CANARY"));
     }
 
     #[test]

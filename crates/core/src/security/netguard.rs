@@ -10,6 +10,11 @@
 //! | `LocalInference` | `http://127.0.0.1:<port>` | 항상 허용 (루프백 전용, 프록시 미사용) |
 //! | `EngineDownload` | 고정된 GitHub 릴리스 호스트 (HTTPS) | 사용자의 명시적 동의 필요 |
 //! | `ModelDownload`  | 로컬 엔진에 "카탈로그에 있는 모델" 내려받기 지시 | 사용자의 명시적 동의 필요 |
+//! | `UpdateCheck`    | `api.github.com` 의 이 앱 저장소 릴리스 목록 (HTTPS GET) | 업데이트 확인 동의 필요 |
+//! | `UpdateDownload` | GitHub 릴리스 자산 호스트 (HTTPS GET) | 업데이트 확인 동의 필요 |
+//!
+//! 업데이트 확인·내려받기 요청에는 쿠키·인증 정보·사용자 자료를 넣지 않는다.
+//! GitHub가 알 수 있는 정보는 접속한 IP 주소와 요청 시각뿐이다.
 //!
 //! 사용자 문서·질문·응답은 `LocalInference` 경로로만 흐른다.
 use crate::error::{AppError, AppResult};
@@ -27,6 +32,9 @@ pub const ENGINE_DOWNLOAD_HOSTS: &[&str] = &[
     "release-assets.githubusercontent.com",
 ];
 
+/// 업데이트 확인(릴리스 목록 조회)에 허용되는 호스트.
+pub const UPDATE_CHECK_HOSTS: &[&str] = &["api.github.com"];
+
 /// 모델 내려받기는 엔진(Ollama) 프로세스가 직접 수행한다. 표시·감사 목적의 호스트 이름.
 pub const MODEL_REGISTRY_HOST: &str = "registry.ollama.ai";
 
@@ -36,6 +44,8 @@ pub enum Purpose {
     LocalInference,
     EngineDownload,
     ModelDownload,
+    UpdateCheck,
+    UpdateDownload,
 }
 
 /// 네트워크 감사 기록. 메타데이터만 담는다 (본문·문서 내용 없음).
@@ -51,6 +61,7 @@ pub struct AuditEntry {
 
 pub struct NetGuard {
     download_consent: AtomicBool,
+    update_consent: AtomicBool,
     audit: Mutex<Vec<AuditEntry>>,
     loopback: reqwest::Client,
 }
@@ -71,7 +82,7 @@ impl NetGuard {
             .connect_timeout(Duration::from_secs(5))
             .build()
             .expect("loopback client");
-        Self { download_consent: AtomicBool::new(false), audit: Mutex::new(Vec::new()), loopback }
+        Self { download_consent: AtomicBool::new(false), update_consent: AtomicBool::new(false), audit: Mutex::new(Vec::new()), loopback }
     }
 
     /// 사용자가 "모델/엔진 내려받기를 위한 인터넷 사용"에 동의했는지 설정한다.
@@ -81,6 +92,15 @@ impl NetGuard {
 
     pub fn download_consent(&self) -> bool {
         self.download_consent.load(Ordering::SeqCst)
+    }
+
+    /// 사용자가 "업데이트 확인을 위해 GitHub에 접속"하는 것에 동의했는지 설정한다.
+    pub fn set_update_consent(&self, v: bool) {
+        self.update_consent.store(v, Ordering::SeqCst);
+    }
+
+    pub fn update_consent(&self) -> bool {
+        self.update_consent.load(Ordering::SeqCst)
     }
 
     pub fn audit_log(&self) -> Vec<AuditEntry> {
@@ -126,6 +146,16 @@ impl NetGuard {
                     Ok(())
                 }
             }
+            Purpose::UpdateCheck | Purpose::UpdateDownload => {
+                let hosts = if purpose == Purpose::UpdateCheck { UPDATE_CHECK_HOSTS } else { ENGINE_DOWNLOAD_HOSTS };
+                if !self.update_consent() {
+                    Err(AppError::ConsentRequired("업데이트를 확인하려면 GitHub 접속에 동의해 주세요".into()))
+                } else if url.scheme() != "https" || !hosts.contains(&host.as_str()) || !url.username().is_empty() || url.port().is_some() {
+                    Err(AppError::Blocked("허용되지 않은 업데이트 주소입니다".into()))
+                } else {
+                    Ok(())
+                }
+            }
             Purpose::ModelDownload => Err(AppError::Blocked(
                 "모델 내려받기는 authorize_model_pull을 통해서만 허용됩니다".into(),
             )),
@@ -156,7 +186,20 @@ impl NetGuard {
 
     /// 엔진 내려받기 전용 요청. 리다이렉트는 허용 목록 안에서만 따른다.
     pub fn engine_download_request(&self, url: &Url, detail: &str) -> AppResult<reqwest::RequestBuilder> {
-        self.check(Purpose::EngineDownload, url, detail)?;
+        self.external_get(Purpose::EngineDownload, url, detail)
+    }
+
+    /// 업데이트 확인·내려받기 요청.
+    pub fn update_request(&self, purpose: Purpose, url: &Url, detail: &str) -> AppResult<reqwest::RequestBuilder> {
+        if !matches!(purpose, Purpose::UpdateCheck | Purpose::UpdateDownload) {
+            return Err(AppError::Blocked("업데이트 요청이 아닙니다".into()));
+        }
+        self.external_get(purpose, url, detail)
+    }
+
+    /// 외부 HTTPS GET. 리다이렉트는 다운로드 허용 호스트 안에서만, 최대 5번 따른다.
+    fn external_get(&self, purpose: Purpose, url: &Url, detail: &str) -> AppResult<reqwest::RequestBuilder> {
+        self.check(purpose, url, detail)?;
         let client = reqwest::Client::builder()
             .https_only(true)
             .redirect(reqwest::redirect::Policy::custom(|attempt| {
@@ -177,7 +220,7 @@ impl NetGuard {
             .build()
             .map_err(|_| AppError::Network("내려받기 준비에 실패했습니다".into()))?;
         // 쿠키·인증·사용자 데이터 없이 GET만 수행한다.
-        Ok(client.get(url.clone()))
+        Ok(client.get(url.clone()).header("Accept", "application/vnd.github+json, application/octet-stream"))
     }
 }
 
@@ -252,6 +295,27 @@ mod tests {
         // 동의 철회 즉시 차단
         g.set_download_consent(false);
         assert!(g.authorize_model_pull("gemma3:4b", &allowed).is_err());
+    }
+
+    #[test]
+    fn update_requests_need_consent_and_github_only() {
+        let g = NetGuard::new();
+        let api = u("https://api.github.com/repos/philosophyAIEDU/261110philosophylocalai/releases");
+        assert!(matches!(g.check(Purpose::UpdateCheck, &api, ""), Err(AppError::ConsentRequired(_))));
+        g.set_update_consent(true);
+        assert!(g.check(Purpose::UpdateCheck, &api, "").is_ok());
+        // 다운로드 동의(AI 모델용)와는 별개
+        assert!(!g.download_consent());
+        for bad in ["http://api.github.com/x", "https://api.github.com.evil.example/x", "https://evil.example/x", "https://api.github.com:8443/x", "https://user@api.github.com/x"] {
+            assert!(g.check(Purpose::UpdateCheck, &u(bad), "").is_err(), "{bad}");
+        }
+        // 릴리스 목록 조회 호스트에서는 파일을 받지 않고, 자산 호스트에서는 목록을 조회하지 않는다
+        assert!(g.check(Purpose::UpdateDownload, &api, "").is_err());
+        assert!(g.check(Purpose::UpdateCheck, &u("https://github.com/x"), "").is_err());
+        assert!(g.check(Purpose::UpdateDownload, &u("https://github.com/philosophyAIEDU/r/releases/download/v1/a.exe"), "").is_ok());
+        g.set_update_consent(false);
+        assert!(g.check(Purpose::UpdateDownload, &u("https://github.com/x"), "").is_err());
+        assert!(g.update_request(Purpose::LocalInference, &api, "").is_err());
     }
 
     #[test]

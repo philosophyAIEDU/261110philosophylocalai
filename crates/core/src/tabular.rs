@@ -9,6 +9,8 @@ use std::collections::HashMap;
 use std::path::Path;
 
 const MAX_ROWS: usize = 200_000;
+/// 표 파일 최대 크기 (악의적으로 큰 파일·압축 폭탄으로 앱이 멈추는 것을 막는다)
+const MAX_TABLE_FILE_BYTES: u64 = 100 * 1024 * 1024;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct Table {
@@ -93,6 +95,10 @@ pub struct GroupResult {
 pub fn load(path: &Path, sheet: Option<&str>) -> AppResult<Table> {
     let file_name = path.file_name().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
     let ext = path.extension().map(|e| e.to_string_lossy().to_ascii_lowercase()).unwrap_or_default();
+    let size = std::fs::metadata(path).map_err(|_| AppError::File("파일을 열 수 없습니다".into()))?.len();
+    if size > MAX_TABLE_FILE_BYTES {
+        return Err(AppError::File("파일이 너무 큽니다 (최대 100MB)".into()));
+    }
     let (raw, sheets, sheet_name): (Vec<Vec<String>>, Vec<String>, Option<String>) = match ext.as_str() {
         "csv" | "tsv" | "txt" => {
             let text = decode_text(&std::fs::read(path).map_err(|_| AppError::File("파일을 열 수 없습니다".into()))?);

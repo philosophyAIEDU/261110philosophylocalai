@@ -21,5 +21,6 @@ pub mod security;
 pub mod storage;
 pub mod tabular;
 pub mod tasks;
+pub mod update;
 
 pub use error::{AppError, AppResult};

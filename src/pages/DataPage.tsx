@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { Agg, ChatOutcome, GroupResult, GroupSpec, TableInfo, call, errMsg, fmtNum, pickFile, pickSave } from "../lib/api";
-import { Empty, ErrorNotice, ExportButtons, Icon, Md, Notice, PageHeader, useAiJob } from "../lib/ui";
+import { Agg, ChatOutcome, GroupResult, GroupSpec, TableInfo, call, errMsg, fmtNum } from "../lib/api";
+import { Empty, ErrorNotice, ExportButtons, Icon, Md, Notice, PageHeader, SecurityTip, useAiJob } from "../lib/ui";
 import { NeedModel, useApp } from "../App";
 
 const AGGS: { id: Agg; label: string }[] = [{ id: "count", label: "개수" }, { id: "mean", label: "평균" }, { id: "sum", label: "합계" }, { id: "min", label: "최솟값" }, { id: "max", label: "최댓값" }];
@@ -30,7 +30,6 @@ function BarChart({ result }: { result: GroupResult }) {
 export default function DataPage() {
   const { status } = useApp();
   const [table, setTable] = useState<TableInfo | null>(null);
-  const [path, setPath] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [groupCol, setGroupCol] = useState("");
@@ -45,17 +44,20 @@ export default function DataPage() {
 
   useEffect(() => () => { void call("clear_loaded_files"); }, []);
 
-  const load = async (p: string, sheet: string | null) => {
-    setLoading(true); setError(null); setGroup(null); job.reset(); setStats("");
+  const load = async (sheet: string | null) => {
+    setLoading(true); setError(null);
     try {
-      const t = await call<TableInfo>("load_table", { path: p, sheet });
-      setTable(t); setPath(p);
+      // 파일 선택 창은 앱이 직접 띄운다 (화면은 파일 경로를 다루지 않음)
+      const t = sheet === null ? await call<TableInfo | null>("pick_table") : await call<TableInfo>("reload_table_sheet", { sheet });
+      if (!t) { setLoading(false); return; }
+      setGroup(null); job.reset(); setStats("");
+      setTable(t);
       const firstText = t.profile.columns.find((c) => c.kind === "text" && c.unique > 1 && c.unique <= Math.max(30, t.profile.row_count / 2));
       setGroupCol(firstText?.name ?? t.headers[0] ?? ""); setValueCol(""); setAgg("count");
     } catch (e) { setError(errMsg(e)); }
     setLoading(false);
   };
-  const pick = async () => { const p = await pickFile("표 데이터", ["xlsx", "xls", "xlsm", "csv", "tsv"]); if (p) await load(p, null); };
+  const pick = () => load(null);
 
   const spec: GroupSpec | null = useMemo(() => (table && groupCol ? { group_column: groupCol, value_column: agg === "count" ? null : valueCol || null, agg } : null), [table, groupCol, valueCol, agg]);
   const specValid = !!spec && (agg === "count" || !!valueCol);
@@ -74,10 +76,8 @@ export default function DataPage() {
     if (!table) return;
     setSaveMsg(null);
     try {
-      const out = await pickSave(`${table.file_name.replace(/\.[^.]+$/, "")}_분석결과.xlsx`, "Excel 파일", ["xlsx"]);
-      if (!out) return;
-      await call("export_analysis_xlsx", { tableId: table.id, spec: group && specValid ? spec : null, path: out });
-      setSaveMsg("Excel 파일로 저장했습니다.");
+      const name = await call<string | null>("save_analysis_xlsx", { tableId: table.id, spec: group && specValid ? spec : null });
+      if (name) setSaveMsg(`'${name}'(으)로 저장했습니다. 저장한 파일은 암호화되지 않습니다.`);
     } catch (e) { setSaveMsg(errMsg(e)); }
   };
 
@@ -89,6 +89,7 @@ export default function DataPage() {
       <PageHeader title="Excel 데이터 분석" sub="Excel·CSV 파일의 통계를 프로그램이 정확히 계산하고, AI가 그 결과를 해석해 보고서로 정리합니다."
         right={<button className="btn-primary shrink-0" onClick={pick} disabled={loading || job.running}><Icon name="plus" className="h-4 w-4" /> {loading ? "읽는 중…" : "파일 불러오기"}</button>} />
       <ErrorNotice error={error} onDismiss={() => setError(null)} />
+      <SecurityTip title="보안 유의사항">성적처럼 학생 개인정보가 담긴 표는 이름·학번 열을 지운 사본으로 분석하시길 권합니다. AI에게는 개별 학생의 행이 아니라 계산된 통계표만 전달되며, 불러온 표는 메뉴를 떠나거나 앱이 잠기면 메모리에서 지워집니다.</SecurityTip>
 
       {!table ? (
         <Empty icon="table" title="분석할 파일을 불러와 주세요">Excel(.xlsx, .xls)과 CSV 파일을 지원합니다. 첫 줄을 항목 이름으로 읽습니다. 파일은 이 컴퓨터 안에서만 처리됩니다.</Empty>
@@ -97,9 +98,9 @@ export default function DataPage() {
           <section className="card">
             <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
               <h2 className="h2">{table.file_name}</h2>
-              {table.sheets.length > 1 && path && (
+              {table.sheets.length > 1 && (
                 <label className="flex items-center gap-2 text-[14px]"><span className="text-muted">시트</span>
-                  <select className="input w-auto py-1.5" value={table.sheet ?? ""} onChange={(e) => load(path, e.target.value)}>{table.sheets.map((s) => <option key={s}>{s}</option>)}</select>
+                  <select className="input w-auto py-1.5" value={table.sheet ?? ""} onChange={(e) => load(e.target.value)}>{table.sheets.map((s) => <option key={s}>{s}</option>)}</select>
                 </label>
               )}
             </div>

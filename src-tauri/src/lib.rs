@@ -12,50 +12,90 @@ use pla_core::models::Catalog;
 use pla_core::runtime::engine::{check_free_space, verify_local_only, EngineManager, EngineStatus, LocalOnlyReport};
 use pla_core::runtime::ollama::OllamaRuntime;
 use pla_core::runtime::{AiRuntime, ChatMessage, ChatOutcome, ChatRequest, InstalledModel};
-use pla_core::security::crypto::{Cipher, KeyStoreKind};
+use pla_core::security::keystore::{KeyState, KeyStore, KeyStoreKind};
 use pla_core::security::{AuditEntry, NetGuard};
 use pla_core::storage::{ConversationMeta, Store, StoreStats, StoredMessage, StudentNote};
 use pla_core::tabular::{self, Agg, GroupResult, Table, TableProfile};
 use pla_core::tasks::{self, Material, TaskDef};
-use pla_core::{export, AppError as E};
+use pla_core::AppError as E;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
+
+mod secure;
 use tauri::{AppHandle, Emitter, Manager, State};
 use tokio_util::sync::CancellationToken;
 
-struct AppState {
-    data_dir: PathBuf,
-    guard: Arc<NetGuard>,
-    engine: Arc<EngineManager>,
-    store: Arc<Store>,
-    catalog: Catalog,
-    key_store: KeyStoreKind,
-    hardware: Mutex<Option<HardwareProfile>>,
-    jobs: Mutex<HashMap<String, CancellationToken>>,
-    /// 불러온 문서는 메모리에만 둔다 (앱을 닫으면 사라진다).
-    docs: Mutex<HashMap<String, ExtractedDocument>>,
-    tables: Mutex<HashMap<String, Table>>,
+pub(crate) struct AppState {
+    pub(crate) data_dir: PathBuf,
+    pub(crate) guard: Arc<NetGuard>,
+    pub(crate) engine: Arc<EngineManager>,
+    pub(crate) store: Arc<Store>,
+    pub(crate) catalog: Catalog,
+    /// 암호화 키 보관소 (앱 잠금 암호 포함)
+    pub(crate) keystore: KeyStore,
+    pub(crate) hardware: Mutex<Option<HardwareProfile>>,
+    pub(crate) jobs: Mutex<HashMap<String, CancellationToken>>,
+    /// 불러온 문서는 메모리에만 둔다 (앱을 닫거나 잠그면 사라진다).
+    pub(crate) docs: Mutex<HashMap<String, ExtractedDocument>>,
+    pub(crate) tables: Mutex<HashMap<String, Table>>,
+    /// 마지막으로 불러온 표 파일 경로 (시트 바꾸기용). 화면에는 경로를 주지 않는다.
+    pub(crate) last_table_path: Mutex<Option<PathBuf>>,
+    /// 마지막 사용자 활동 시각 (UNIX 초) — 자동 잠금 기준
+    pub(crate) last_activity: AtomicU64,
+    /// 업데이트 확인으로 찾은 설치 파일과, 내려받아 검증한 파일 경로
+    pub(crate) update_asset: Mutex<Option<pla_core::update::InstallerAsset>>,
+    pub(crate) update_file: Mutex<Option<PathBuf>>,
+}
+
+pub(crate) fn now_secs() -> u64 {
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0)
 }
 
 impl AppState {
-    fn register_job(&self, id: &str) -> CancellationToken {
+    /// 잠긴 상태에서는 민감한 작업을 거부한다.
+    pub(crate) fn ensure_unlocked(&self) -> AppResult<()> {
+        if self.store.is_locked() {
+            Err(E::Locked)
+        } else {
+            Ok(())
+        }
+    }
+
+    pub(crate) fn touch(&self) {
+        self.last_activity.store(now_secs(), Ordering::Relaxed);
+    }
+
+    /// 앱을 잠근다: 키를 메모리에서 지우고, 불러온 문서·표를 비우고, 진행 중인 AI 작업을 멈춘다.
+    pub(crate) fn lock_now(&self, app: &AppHandle) {
+        self.store.lock();
+        self.docs.lock().unwrap().clear();
+        self.tables.lock().unwrap().clear();
+        *self.last_table_path.lock().unwrap() = None;
+        for (_, t) in self.jobs.lock().unwrap().drain() {
+            t.cancel();
+        }
+        let _ = app.emit("app-locked", ());
+    }
+
+    pub(crate) fn register_job(&self, id: &str) -> CancellationToken {
         let t = CancellationToken::new();
         self.jobs.lock().unwrap().insert(id.to_string(), t.clone());
         t
     }
 
-    fn finish_job(&self, id: &str) {
+    pub(crate) fn finish_job(&self, id: &str) {
         self.jobs.lock().unwrap().remove(id);
     }
 
-    async fn runtime(&self) -> AppResult<OllamaRuntime> {
+    pub(crate) async fn runtime(&self) -> AppResult<OllamaRuntime> {
         let port = self.engine.start().await?;
         Ok(OllamaRuntime::new(port, self.guard.clone(), self.catalog.allowed_ids()))
     }
 
-    fn selected_model(&self) -> AppResult<String> {
+    pub(crate) fn selected_model(&self) -> AppResult<String> {
         self.store
             .get_setting("selected_model")?
             .filter(|s| !s.is_empty())
@@ -63,7 +103,7 @@ impl AppState {
     }
 
     /// 컴퓨터 메모리에 맞춘 컨텍스트 길이.
-    fn num_ctx(&self) -> u32 {
+    pub(crate) fn num_ctx(&self) -> u32 {
         let ram = self.hardware.lock().unwrap().as_ref().map(|h| h.total_ram).unwrap_or(8 * GB);
         if ram >= 15 * GB {
             8192
@@ -100,6 +140,14 @@ struct AppStatus {
     download_consent: bool,
     save_history: bool,
     purpose: Purpose,
+    /// 앱이 잠겨 있는지 (잠금 암호 입력 필요)
+    locked: bool,
+    has_passcode: bool,
+    auto_lock_minutes: u32,
+    screen_protection: bool,
+    pseudonymize_students: bool,
+    update_consent: bool,
+    include_prerelease: bool,
 }
 
 fn stored_purpose(store: &Store) -> Purpose {
@@ -129,6 +177,13 @@ async fn app_status(state: State<'_, AppState>) -> AppResult<AppStatus> {
         download_consent: state.guard.download_consent(),
         save_history: state.store.get_bool("save_history", false),
         purpose: stored_purpose(&state.store),
+        locked: state.store.is_locked(),
+        has_passcode: state.keystore.state()? == KeyState::Passcode,
+        auto_lock_minutes: secure::auto_lock_minutes(&state.store),
+        screen_protection: state.store.get_bool("screen_protection", true),
+        pseudonymize_students: state.store.get_bool("pseudonymize_students", true),
+        update_consent: state.guard.update_consent(),
+        include_prerelease: state.store.get_bool("include_prerelease", true),
     })
 }
 
@@ -310,14 +365,14 @@ fn title_from(text: &str) -> String {
     if t.chars().count() > 28 { format!("{short}…") } else { short }
 }
 
-fn token_sink(app: &AppHandle, job_id: &str) -> pla_core::runtime::TokenSink {
+pub(crate) fn token_sink(app: &AppHandle, job_id: &str) -> pla_core::runtime::TokenSink {
     let (app, jid) = (app.clone(), job_id.to_string());
     Box::new(move |tok| {
         let _ = app.emit("ai-token", serde_json::json!({ "job_id": jid, "token": tok }));
     })
 }
 
-fn stage_sink(app: &AppHandle, job_id: &str) -> tasks::StageSink {
+pub(crate) fn stage_sink(app: &AppHandle, job_id: &str) -> tasks::StageSink {
     let (app, jid) = (app.clone(), job_id.to_string());
     Box::new(move |stage| {
         let _ = app.emit("ai-stage", serde_json::json!({ "job_id": jid, "stage": stage }));
@@ -331,6 +386,7 @@ fn user_visible_only(messages: Vec<ChatMessage>) -> Vec<ChatMessage> {
 
 #[tauri::command]
 async fn chat_send(app: AppHandle, state: State<'_, AppState>, job_id: String, conversation_id: Option<String>, messages: Vec<ChatMessage>) -> AppResult<ChatResult> {
+    state.ensure_unlocked()?;
     let model = state.selected_model()?;
     let rt = state.runtime().await?;
     let history = user_visible_only(messages);
@@ -378,7 +434,7 @@ fn delete_conversation(state: State<'_, AppState>, id: String) -> AppResult<()> 
 // ---------------------------------------------------------------------------
 
 #[derive(Serialize)]
-struct DocInfo {
+pub(crate) struct DocInfo {
     id: String,
     file_name: String,
     kind: String,
@@ -388,9 +444,9 @@ struct DocInfo {
     preview: String,
 }
 
-#[tauri::command]
-async fn load_document(state: State<'_, AppState>, path: String) -> AppResult<DocInfo> {
-    let doc = tauri::async_runtime::spawn_blocking(move || documents::extract(Path::new(&path))).await.map_err(|_| E::File("문서를 읽는 중 오류가 발생했습니다".into()))??;
+/// 경로는 Rust 쪽 파일 선택 대화상자에서만 온다 (화면이 경로를 지정할 수 없음).
+pub(crate) async fn load_document_path(state: &AppState, path: PathBuf) -> AppResult<DocInfo> {
+    let doc = tauri::async_runtime::spawn_blocking(move || documents::extract(&path)).await.map_err(|_| E::File("문서를 읽는 중 오류가 발생했습니다".into()))??;
     let id = uuid::Uuid::new_v4().to_string();
     let info = DocInfo {
         id: id.clone(),
@@ -417,6 +473,7 @@ fn list_tasks() -> Vec<TaskDef> {
 
 #[tauri::command]
 async fn run_task(app: AppHandle, state: State<'_, AppState>, job_id: String, task_id: String, doc_ids: Vec<String>, pasted: String, extra: String) -> AppResult<ChatOutcome> {
+    state.ensure_unlocked()?;
     let task = tasks::find_task(&task_id).ok_or_else(|| E::Other("알 수 없는 작업입니다".into()))?;
     let model = state.selected_model()?;
     let materials = state.materials(&doc_ids, &pasted)?;
@@ -435,6 +492,7 @@ struct QaResult {
 
 #[tauri::command]
 async fn doc_qa(app: AppHandle, state: State<'_, AppState>, job_id: String, doc_ids: Vec<String>, question: String, history: Vec<ChatMessage>) -> AppResult<QaResult> {
+    state.ensure_unlocked()?;
     let model = state.selected_model()?;
     let materials = state.materials(&doc_ids, "")?;
     if materials.is_empty() {
@@ -455,6 +513,7 @@ async fn doc_qa(app: AppHandle, state: State<'_, AppState>, job_id: String, doc_
 
 #[tauri::command]
 fn add_student_note(state: State<'_, AppState>, student: String, date: String, content: String) -> AppResult<String> {
+    state.ensure_unlocked()?;
     if student.trim().is_empty() || content.trim().is_empty() {
         return Err(E::Other("학생 이름(또는 별칭)과 상담 내용을 입력해 주세요".into()));
     }
@@ -476,7 +535,7 @@ fn delete_student_note(state: State<'_, AppState>, id: String) -> AppResult<()> 
 // ---------------------------------------------------------------------------
 
 #[derive(Serialize)]
-struct TableInfo {
+pub(crate) struct TableInfo {
     id: String,
     file_name: String,
     sheet: Option<String>,
@@ -487,9 +546,9 @@ struct TableInfo {
     profile: TableProfile,
 }
 
-#[tauri::command]
-async fn load_table(state: State<'_, AppState>, path: String, sheet: Option<String>) -> AppResult<TableInfo> {
-    let table = tauri::async_runtime::spawn_blocking(move || tabular::load(Path::new(&path), sheet.as_deref())).await.map_err(|_| E::File("파일을 읽는 중 오류가 발생했습니다".into()))??;
+pub(crate) async fn load_table_path(state: &AppState, path: PathBuf, sheet: Option<String>) -> AppResult<TableInfo> {
+    let p2 = path.clone();
+    let table = tauri::async_runtime::spawn_blocking(move || tabular::load(&p2, sheet.as_deref())).await.map_err(|_| E::File("파일을 읽는 중 오류가 발생했습니다".into()))??;
     let profile = tabular::profile(&table);
     let id = uuid::Uuid::new_v4().to_string();
     let info = TableInfo {
@@ -505,17 +564,18 @@ async fn load_table(state: State<'_, AppState>, path: String, sheet: Option<Stri
     let mut tables = state.tables.lock().unwrap();
     tables.clear(); // 한 번에 하나의 표만 메모리에 둔다
     tables.insert(id, table);
+    *state.last_table_path.lock().unwrap() = Some(path);
     Ok(info)
 }
 
 #[derive(Deserialize, Clone)]
-struct GroupSpec {
+pub(crate) struct GroupSpec {
     group_column: String,
     value_column: Option<String>,
     agg: Agg,
 }
 
-fn compute_group(state: &AppState, table_id: &str, spec: &GroupSpec) -> AppResult<GroupResult> {
+pub(crate) fn compute_group(state: &AppState, table_id: &str, spec: &GroupSpec) -> AppResult<GroupResult> {
     let tables = state.tables.lock().unwrap();
     let t = tables.get(table_id).ok_or_else(|| E::Other("데이터를 찾을 수 없습니다. 파일을 다시 불러와 주세요.".into()))?;
     tabular::group_by(t, &spec.group_column, spec.value_column.as_deref(), spec.agg)
@@ -523,6 +583,7 @@ fn compute_group(state: &AppState, table_id: &str, spec: &GroupSpec) -> AppResul
 
 #[tauri::command]
 fn group_table(state: State<'_, AppState>, table_id: String, spec: GroupSpec) -> AppResult<GroupResult> {
+    state.ensure_unlocked()?;
     compute_group(&state, &table_id, &spec)
 }
 
@@ -549,6 +610,7 @@ struct DataReport {
 
 #[tauri::command]
 async fn data_report(app: AppHandle, state: State<'_, AppState>, job_id: String, table_id: String, spec: Option<GroupSpec>, focus: String) -> AppResult<DataReport> {
+    state.ensure_unlocked()?;
     let model = state.selected_model()?;
     let stats = stats_markdown(&state, &table_id, spec.as_ref())?;
     let rt = state.runtime().await?;
@@ -567,27 +629,6 @@ async fn data_report(app: AppHandle, state: State<'_, AppState>, job_id: String,
 // ---------------------------------------------------------------------------
 // 내보내기
 // ---------------------------------------------------------------------------
-
-#[tauri::command]
-async fn export_docx(title: String, markdown: String, path: String) -> AppResult<()> {
-    tauri::async_runtime::spawn_blocking(move || export::markdown_to_docx(&title, &markdown, Path::new(&path))).await.map_err(|_| E::File("저장 중 오류가 발생했습니다".into()))?
-}
-
-#[tauri::command]
-fn export_text(content: String, path: String) -> AppResult<()> {
-    export::save_text(&content, Path::new(&path))
-}
-
-#[tauri::command]
-fn export_analysis_xlsx(state: State<'_, AppState>, table_id: String, spec: Option<GroupSpec>, path: String) -> AppResult<()> {
-    let group = match &spec {
-        Some(s) => Some(compute_group(&state, &table_id, s)?),
-        None => None,
-    };
-    let tables = state.tables.lock().unwrap();
-    let t = tables.get(&table_id).ok_or_else(|| E::Other("데이터를 찾을 수 없습니다. 파일을 다시 불러와 주세요.".into()))?;
-    export::analysis_to_xlsx(t, &tabular::profile(t), group.as_ref(), Path::new(&path))
-}
 
 // ---------------------------------------------------------------------------
 // 개인정보 보호 설정
@@ -624,7 +665,7 @@ async fn privacy_info(state: State<'_, AppState>) -> AppResult<PrivacyInfo> {
         data_dir: state.data_dir.to_string_lossy().into_owned(),
         database_path: state.store.path().to_string_lossy().into_owned(),
         models_dir: models_dir.to_string_lossy().into_owned(),
-        key_store: state.key_store,
+        key_store: state.keystore.kind(),
         save_history: state.store.get_bool("save_history", false),
         download_consent: state.guard.download_consent(),
         stats: state.store.stats()?,
@@ -666,9 +707,22 @@ fn clear_loaded_files(state: State<'_, AppState>) {
 fn build_state(data_dir: PathBuf) -> AppResult<AppState> {
     std::fs::create_dir_all(&data_dir)?;
     let guard = Arc::new(NetGuard::new());
-    let (cipher, key_store) = Cipher::load_or_create(&data_dir)?;
-    let store = Arc::new(Store::open(&data_dir.join("app.db"), cipher)?);
+    let keystore = KeyStore::for_platform(&data_dir);
+    let db_path = data_dir.join("app.db");
+    let store = Store::open_locked(&db_path)?;
+    match keystore.state()? {
+        // 첫 실행 (또는 키가 사라진 경우): 새 키를 만든다. 키 없이 남은 기록은 어차피 읽을 수 없으므로 지운다.
+        KeyState::NoKey => {
+            store.erase_all()?;
+            store.unlock(keystore.create_plain()?);
+        }
+        KeyState::Plain => store.unlock(keystore.open_plain()?),
+        // 앱 잠금 암호가 설정되어 있으면 잠긴 상태로 시작한다.
+        KeyState::Passcode => {}
+    }
+    let store = Arc::new(store);
     guard.set_download_consent(store.get_bool("download_consent", false));
+    guard.set_update_consent(store.get_bool("update_consent", false));
     #[allow(unused_mut)]
     let mut engine = EngineManager::new(data_dir.clone(), guard.clone());
     // 개발 빌드에서만: 가짜 엔진으로 화면 흐름을 시험할 수 있다. 릴리스 빌드에는 이 코드가 없다.
@@ -682,11 +736,15 @@ fn build_state(data_dir: PathBuf) -> AppResult<AppState> {
         engine: Arc::new(engine),
         store,
         catalog: Catalog::builtin(),
-        key_store,
+        keystore,
         hardware: Mutex::new(None),
         jobs: Mutex::new(HashMap::new()),
         docs: Mutex::new(HashMap::new()),
         tables: Mutex::new(HashMap::new()),
+        last_table_path: Mutex::new(None),
+        last_activity: AtomicU64::new(now_secs()),
+        update_asset: Mutex::new(None),
+        update_file: Mutex::new(None),
     })
 }
 
@@ -703,7 +761,12 @@ pub fn run() {
         .setup(|app| {
             let data_dir = app.path().app_local_data_dir().map_err(|_| AppError::Storage("앱 데이터 폴더를 찾을 수 없습니다".into()))?;
             let state = build_state(data_dir)?;
+            // 화면 캡처·화면 공유 방지 (Windows·macOS). 기본으로 켠다.
+            if let Some(w) = app.get_webview_window("main") {
+                let _ = w.set_content_protected(state.store.get_bool("screen_protection", true));
+            }
             app.manage(state);
+            secure::spawn_auto_lock(app.handle().clone());
             // macOS/Linux: 종료 신호(로그아웃·시스템 종료·kill)를 받아도 엔진을 정리하고 끝낸다.
             #[cfg(unix)]
             {
@@ -744,7 +807,6 @@ pub fn run() {
             list_conversations,
             get_conversation,
             delete_conversation,
-            load_document,
             remove_document,
             list_tasks,
             run_task,
@@ -752,17 +814,37 @@ pub fn run() {
             add_student_note,
             list_student_notes,
             delete_student_note,
-            load_table,
             group_table,
             data_report,
-            export_docx,
-            export_text,
-            export_analysis_xlsx,
             privacy_info,
             set_save_history,
             delete_all_conversations,
             delete_all_data,
             clear_loaded_files,
+            secure::unlock_app,
+            secure::lock_app,
+            secure::user_activity,
+            secure::set_passcode,
+            secure::remove_passcode,
+            secure::set_auto_lock,
+            secure::set_screen_protection,
+            secure::set_pseudonymize,
+            secure::factory_reset,
+            secure::security_checkup,
+            secure::pick_document,
+            secure::pick_table,
+            secure::reload_table_sheet,
+            secure::save_docx,
+            secure::save_text,
+            secure::save_analysis_xlsx,
+            secure::run_student_task,
+            secure::set_update_consent,
+            secure::set_include_prerelease,
+            secure::check_update,
+            secure::download_update,
+            secure::open_installer,
+            secure::reveal_installer,
+            secure::open_release_page,
         ])
         .build(tauri::generate_context!())
         .expect("앱을 시작하지 못했습니다");

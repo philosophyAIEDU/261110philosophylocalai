@@ -1,33 +1,18 @@
 //! 저장 데이터 암호화 (XChaCha20-Poly1305).
 //!
-//! 키 보관:
-//! - macOS: 키체인, Windows: 자격 증명 관리자 (`keyring` 크레이트)
-//! - 그 외(개발용 Linux): 앱 데이터 폴더의 0600 권한 키 파일 — 운영체제 보안
-//!   저장소보다 약하므로 정식 지원 플랫폼이 아니다.
+//! 키 보관과 앱 잠금 암호는 `security::keystore`가 담당한다.
 use crate::error::{AppError, AppResult};
 use base64::{engine::general_purpose::STANDARD as B64, Engine};
 use chacha20poly1305::{
     aead::{Aead, AeadCore, KeyInit, OsRng},
     Key, XChaCha20Poly1305, XNonce,
 };
-use std::path::Path;
 
 const PREFIX: &str = "enc:v1:";
 
 #[derive(Clone)]
 pub struct Cipher {
     key: Key,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum KeyStoreKind {
-    /// 운영체제 보안 저장소 (macOS 키체인 / Windows 자격 증명 관리자)
-    OsKeychain,
-    /// 권한 제한 키 파일 (개발/미지원 플랫폼용)
-    KeyFile,
-    /// 테스트용 메모리 키
-    Memory,
 }
 
 impl Cipher {
@@ -39,64 +24,11 @@ impl Cipher {
         Self { key: XChaCha20Poly1305::generate_key(&mut OsRng) }
     }
 
-    /// 운영체제 보안 저장소에서 키를 불러오거나 새로 만든다.
-    pub fn load_or_create(data_dir: &Path) -> AppResult<(Self, KeyStoreKind)> {
-        #[cfg(any(target_os = "macos", target_os = "windows"))]
-        {
-            let _ = data_dir;
-            let entry = keyring::Entry::new("kr.philosophy-ai.local-ai", "data-encryption-key")
-                .map_err(|_| AppError::Storage("운영체제 보안 저장소에 접근할 수 없습니다".into()))?;
-            match entry.get_password() {
-                Ok(b64) => {
-                    let raw = B64.decode(b64.trim()).map_err(|_| AppError::Storage("암호화 키가 손상되었습니다".into()))?;
-                    let arr: [u8; 32] = raw.try_into().map_err(|_| AppError::Storage("암호화 키가 손상되었습니다".into()))?;
-                    Ok((Self::from_key_bytes(arr), KeyStoreKind::OsKeychain))
-                }
-                Err(keyring::Error::NoEntry) => {
-                    let c = Self::generate();
-                    entry
-                        .set_password(&B64.encode(c.key.as_slice()))
-                        .map_err(|_| AppError::Storage("암호화 키를 보안 저장소에 저장하지 못했습니다".into()))?;
-                    Ok((c, KeyStoreKind::OsKeychain))
-                }
-                Err(_) => Err(AppError::Storage("운영체제 보안 저장소에서 암호화 키를 읽지 못했습니다".into())),
-            }
-        }
-        #[cfg(not(any(target_os = "macos", target_os = "windows")))]
-        {
-            let path = data_dir.join("data.key");
-            if path.exists() {
-                let raw = B64
-                    .decode(std::fs::read_to_string(&path)?.trim())
-                    .map_err(|_| AppError::Storage("암호화 키가 손상되었습니다".into()))?;
-                let arr: [u8; 32] = raw.try_into().map_err(|_| AppError::Storage("암호화 키가 손상되었습니다".into()))?;
-                return Ok((Self::from_key_bytes(arr), KeyStoreKind::KeyFile));
-            }
-            let c = Self::generate();
-            std::fs::create_dir_all(data_dir)?;
-            std::fs::write(&path, B64.encode(c.key.as_slice()))?;
-            #[cfg(unix)]
-            {
-                use std::os::unix::fs::PermissionsExt;
-                std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600))?;
-            }
-            Ok((c, KeyStoreKind::KeyFile))
-        }
-    }
-
-    /// 운영체제 보안 저장소의 키를 삭제한다 ("모든 데이터 삭제" 시 사용).
-    pub fn destroy_stored_key(data_dir: &Path) {
-        #[cfg(any(target_os = "macos", target_os = "windows"))]
-        {
-            let _ = data_dir;
-            if let Ok(e) = keyring::Entry::new("kr.philosophy-ai.local-ai", "data-encryption-key") {
-                let _ = e.delete_credential();
-            }
-        }
-        #[cfg(not(any(target_os = "macos", target_os = "windows")))]
-        {
-            let _ = std::fs::remove_file(data_dir.join("data.key"));
-        }
+    /// 키 원본 (키 보관소에 감싸서 저장할 때만 사용).
+    pub(crate) fn key_bytes(&self) -> [u8; 32] {
+        let mut out = [0u8; 32];
+        out.copy_from_slice(self.key.as_slice());
+        out
     }
 
     pub fn encrypt(&self, plaintext: &str) -> AppResult<String> {

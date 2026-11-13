@@ -59,6 +59,12 @@ export default function Home() {
         </ul>
       </section>
 
+      {!status.has_passcode && (
+        <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-warn/25 bg-warn-soft px-4 py-3 text-[14px]">
+          <span><b>앱 잠금 암호가 설정되지 않았습니다.</b> 학생 상담 기록 같은 개인정보를 저장하신다면 먼저 설정해 주세요.</span>
+          <button className="btn-primary btn-sm shrink-0" onClick={() => go("privacy")}>보안 설정하기</button>
+        </div>
+      )}
       <NeedModel />
 
       <div className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

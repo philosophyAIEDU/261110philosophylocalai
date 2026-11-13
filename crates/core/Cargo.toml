@@ -6,6 +6,7 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
+argon2 = "0.5"
 async-trait = "0.1"
 axum = { version = "0.7", optional = true }
 base64 = "0.22"

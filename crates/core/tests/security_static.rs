@@ -118,8 +118,42 @@ fn tauri_config_is_locked_down() {
     let caps = workspace_root().join("src-tauri/capabilities");
     for e in std::fs::read_dir(caps).unwrap().flatten() {
         let s = std::fs::read_to_string(e.path()).unwrap();
-        for bad in ["shell:", "http:", "fs:", "updater:", "opener:"] {
+        for bad in ["shell:", "http:", "fs:", "updater:", "opener:", "dialog:", "core:default", "core:window", "core:webview", "core:path"] {
             assert!(!s.contains(bad), "불필요한 권한: {bad}");
         }
     }
+}
+
+#[test]
+fn webview_cannot_supply_file_paths() {
+    // 화면(웹뷰)이 호출하는 Tauri 명령은 파일 경로를 인자로 받지 않는다.
+    // 파일은 Rust 쪽 대화상자(secure.rs)에서 교수님이 고른 것만 사용한다.
+    let dir = workspace_root().join("src-tauri/src");
+    if !dir.exists() {
+        return;
+    }
+    for e in std::fs::read_dir(dir).unwrap().flatten() {
+        let src = std::fs::read_to_string(e.path()).unwrap();
+        let mut in_cmd = false;
+        for line in src.lines() {
+            let t = line.trim();
+            if t.starts_with("#[tauri::command]") {
+                in_cmd = true;
+                continue;
+            }
+            if in_cmd && (t.contains("fn ") ) {
+                for bad in ["path: String", "path: PathBuf", "path: &str", "dir: String", "file: String", "url: String"] {
+                    assert!(!t.contains(bad), "{}: 명령이 경로/주소를 화면에서 받음: {t}", e.path().display());
+                }
+                in_cmd = false;
+            }
+        }
+    }
+}
+
+#[test]
+fn sqlite_never_spills_temp_files() {
+    let src = std::fs::read_to_string(workspace_root().join("crates/core/src/storage.rs")).unwrap();
+    assert!(src.contains("PRAGMA temp_store = MEMORY"));
+    assert!(src.contains("PRAGMA secure_delete = ON"));
 }
