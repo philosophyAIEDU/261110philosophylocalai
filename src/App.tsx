@@ -17,6 +17,7 @@ export type Page = "home" | "chat" | "lecture" | "student" | "research" | "admin
 interface Ctx {
   status: AppStatus;
   local: LocalOnlyReport | null;
+  engineError: string | null;
   refresh: () => Promise<void>;
   go: (p: Page) => void;
 }
@@ -65,6 +66,7 @@ export function LocalBadge({ local, onClick }: { local: LocalOnlyReport | null; 
 export default function App() {
   const [status, setStatus] = useState<AppStatus | null>(null);
   const [local, setLocal] = useState<LocalOnlyReport | null>(null);
+  const [engineError, setEngineError] = useState<string | null>(null);
   const [page, setPage] = useState<Page>("home");
   const [fatal, setFatal] = useState<string | null>(null);
   const { theme, toggle } = useTheme();
@@ -72,9 +74,11 @@ export default function App() {
   const refresh = useCallback(async () => {
     try {
       let s = await call<AppStatus>("app_status");
+      setEngineError(null);
       // 설치된 엔진은 앱을 열 때 자동으로 시작한다.
       if (s.engine.installed && !s.engine.running) {
-        try { await call("start_engine"); s = await call<AppStatus>("app_status"); } catch { /* 화면에서 안내 */ }
+        try { await call("start_engine"); s = await call<AppStatus>("app_status"); }
+        catch (e) { setEngineError(errMsg(e)); }
       }
       // 이미 받은 AI가 있는데 선택된 모델이 없으면 자동으로 선택한다 (다시 내려받으라고 묻지 않도록).
       if (s.engine.running && !s.selected_model && !s.locked) {
@@ -122,7 +126,7 @@ export default function App() {
 
   if (status.locked) return <LockScreen onUnlocked={() => { setPage("home"); void refresh(); }} />;
 
-  const ctx: Ctx = { status, local, refresh, go: setPage };
+  const ctx: Ctx = { status, local, engineError, refresh, go: setPage };
 
   if (!status.onboarding_done) {
     return (

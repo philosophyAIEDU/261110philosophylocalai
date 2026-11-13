@@ -153,7 +153,7 @@ impl EngineManager {
     }
 
     pub async fn status(&self) -> EngineStatus {
-        let port = self.child.lock().await.as_ref().map(|c| c.1);
+        let port = self.port().await;
         EngineStatus {
             installed: self.is_installed(),
             version: self.manifest.version.clone(),
@@ -387,7 +387,15 @@ impl EngineManager {
     }
 
     pub async fn port(&self) -> Option<u16> {
-        self.child.lock().await.as_ref().map(|c| c.1)
+        let mut guard = self.child.lock().await;
+        if let Some((child, port)) = guard.as_mut() {
+            if matches!(child.try_wait(), Ok(None)) {
+                return Some(*port);
+            }
+            // 이미 끝난 프로세스를 실행 중으로 표시하지 않는다.
+            *guard = None;
+        }
+        None
     }
 
     pub async fn pid(&self) -> Option<u32> {
