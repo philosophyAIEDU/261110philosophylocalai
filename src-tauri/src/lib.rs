@@ -260,7 +260,10 @@ async fn start_engine(state: State<'_, AppState>) -> AppResult<u16> {
 #[tauri::command]
 async fn list_models(state: State<'_, AppState>) -> AppResult<Vec<InstalledModel>> {
     if !state.engine.is_installed() {
-        return Ok(vec![]);
+        let dir = state.engine.models_dir();
+        let catalog = state.catalog.clone();
+        return tauri::async_runtime::spawn_blocking(move || pla_core::runtime::local_models::discover(&dir, &catalog))
+            .await.map_err(|_| E::Other("기존 AI 파일을 확인하지 못했습니다".into()));
     }
     state.runtime().await?.list_models().await
 }
@@ -268,11 +271,14 @@ async fn list_models(state: State<'_, AppState>) -> AppResult<Vec<InstalledModel
 #[tauri::command]
 async fn pull_model(app: AppHandle, state: State<'_, AppState>, job_id: String, name: String) -> AppResult<()> {
     let model = state.catalog.get(&name).ok_or_else(|| E::Blocked("앱에 등록된 로컬 모델만 내려받을 수 있습니다".into()))?;
+    let rt = state.runtime().await?;
+    if rt.list_models().await?.iter().any(|m| m.name == name && !m.is_remote) {
+        return Ok(());
+    }
     // 저장 공간 확인 (다운로드 용량 + 여유 2GB)
     let models_dir = state.engine.models_dir();
     std::fs::create_dir_all(&models_dir)?;
     check_free_space(&models_dir, ((model.download_gb * 1.1 + 2.0) * 1e9) as u64)?;
-    let rt = state.runtime().await?;
     let cancel = state.register_job(&job_id);
     let jid = job_id.clone();
     let res = rt

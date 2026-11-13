@@ -3,6 +3,7 @@
 //! 앱의 나머지 부분은 `AiRuntime` 트레이트만 사용한다. 현재 구현은 Ollama 하나이며,
 //! 향후 llama.cpp(`llama-server`) 어댑터를 같은 트레이트로 추가할 수 있다.
 pub mod engine;
+pub mod local_models;
 pub mod ollama;
 
 use crate::error::AppResult;
