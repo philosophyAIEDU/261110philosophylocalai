@@ -181,55 +181,13 @@ impl EngineManager {
         tokio::fs::create_dir_all(&root).await?;
         let part = root.join(format!("{}.part", asset.file));
 
-        // 이어받기: 받은 부분이 있으면 Range 요청
-        let have = tokio::fs::metadata(&part).await.map(|m| m.len()).unwrap_or(0);
-        let mut req = self.guard.engine_download_request(&url, &format!("엔진 v{} 내려받기", self.manifest.version))?;
-        if have > 0 {
-            req = req.header("Range", format!("bytes={have}-"));
-        }
-        on_progress(InstallProgress { stage: "AI 실행 엔진을 내려받는 중".into(), ..Default::default() });
-        let resp = req.send().await.map_err(|_| AppError::Network("인터넷 연결을 확인해 주세요".into()))?;
-        let status = resp.status();
-        if !(status.is_success()) {
-            return Err(AppError::Network(format!("AI 실행 엔진을 내려받지 못했습니다 (코드 {})", status.as_u16())));
-        }
-        let resumed = status.as_u16() == 206 && have > 0;
-        let mut completed = if resumed { have } else { 0 };
-        let total = resp.content_length().map(|l| l + completed).unwrap_or(0);
-        if let Some(need) = total.checked_sub(completed) {
-            check_free_space(&root, need * 3)?; // 압축 파일 + 압축 해제 여유
-        }
-        let mut file = tokio::fs::OpenOptions::new().create(true).write(true).append(resumed).truncate(!resumed).open(&part).await?;
-        let mut stream = resp.bytes_stream();
-        use futures_util::StreamExt;
-        loop {
-            let chunk = tokio::select! {
-                _ = cancel.cancelled() => { file.flush().await.ok(); return Err(AppError::Cancelled); }
-                c = stream.next() => c,
-            };
-            match chunk {
-                Some(Ok(b)) => {
-                    file.write_all(&b).await?;
-                    completed += b.len() as u64;
-                    on_progress(InstallProgress { stage: "AI 실행 엔진을 내려받는 중".into(), total_bytes: total, completed_bytes: completed, done: false });
-                }
-                Some(Err(_)) => {
-                    file.flush().await.ok();
-                    return Err(AppError::Network("내려받는 중 연결이 끊겼습니다. 다시 시도하면 이어서 받습니다.".into()));
-                }
-                None => break,
-            }
-        }
-        file.flush().await?;
-        drop(file);
-
-        on_progress(InstallProgress { stage: "내려받은 파일이 올바른지 확인하는 중".into(), total_bytes: total, completed_bytes: completed, done: false });
-        let p = part.clone();
-        let actual = tokio::task::spawn_blocking(move || sha256_file(&p)).await.map_err(|_| AppError::Other("확인 작업 실패".into()))??;
-        if !actual.eq_ignore_ascii_case(expected.trim()) {
-            let _ = tokio::fs::remove_file(&part).await;
-            return Err(AppError::Blocked("내려받은 엔진 파일이 공식 배포 파일과 일치하지 않아 설치를 중단했습니다".into()));
-        }
+        let (total, completed, actual) = download_archive(
+            &part,
+            &expected,
+            || self.guard.engine_download_request(&url, &format!("엔진 v{} 내려받기", self.manifest.version)),
+            &mut on_progress,
+            &cancel,
+        ).await?;
 
         on_progress(InstallProgress { stage: "설치하는 중".into(), total_bytes: total, completed_bytes: completed, done: false });
         let dest = self.install_dir();
@@ -401,6 +359,86 @@ impl EngineManager {
     pub async fn pid(&self) -> Option<u32> {
         self.child.lock().await.as_ref().and_then(|c| c.0.id())
     }
+}
+
+/// 416은 오래된·완료된 임시 파일 때문에 발생할 수 있다. 검증된 캐시는 재사용하고,
+/// 나머지는 Range 없이 한 번만 재시도한다. 모든 요청은 호출자의 NetGuard를 거친다.
+async fn download_archive(
+    part: &Path,
+    expected: &str,
+    request: impl Fn() -> AppResult<reqwest::RequestBuilder>,
+    on_progress: &mut (impl FnMut(InstallProgress) + Send),
+    cancel: &CancellationToken,
+) -> AppResult<(u64, u64, String)> {
+    if cancel.is_cancelled() { return Err(AppError::Cancelled); }
+    let mut have = tokio::fs::metadata(part).await.map(|m| m.len()).unwrap_or(0);
+    if have > 0 {
+        on_progress(InstallProgress { stage: "이전에 받은 엔진 파일을 확인하는 중".into(), total_bytes: have, completed_bytes: have, done: false });
+        let path = part.to_path_buf();
+        let actual = tokio::task::spawn_blocking(move || sha256_file(&path)).await.map_err(|_| AppError::Other("확인 작업 실패".into()))??;
+        if cancel.is_cancelled() { return Err(AppError::Cancelled); }
+        if actual.eq_ignore_ascii_case(expected.trim()) { return Ok((have, have, actual)); }
+    }
+    let mut req = request()?;
+    if have > 0 { req = req.header("Range", format!("bytes={have}-")); }
+    on_progress(InstallProgress { stage: "AI 실행 엔진을 내려받는 중".into(), ..Default::default() });
+    let mut resp = tokio::select! {
+        _ = cancel.cancelled() => return Err(AppError::Cancelled),
+        result = req.send() => result.map_err(|_| AppError::Network("인터넷 연결을 확인해 주세요".into()))?,
+    };
+    if resp.status() == reqwest::StatusCode::RANGE_NOT_SATISFIABLE && have > 0 {
+        on_progress(InstallProgress { stage: "이어받기를 지원하지 않아 엔진 파일을 처음부터 다시 받는 중".into(), ..Default::default() });
+        // 첫 응답은 버리고 새 요청에는 Range를 보내지 않는다. 재시도는 한 번뿐이다.
+        drop(resp);
+        have = 0;
+        resp = tokio::select! {
+            _ = cancel.cancelled() => return Err(AppError::Cancelled),
+            result = request()?.send() => result.map_err(|_| AppError::Network("인터넷 연결을 확인해 주세요".into()))?,
+        };
+    }
+    let status = resp.status();
+    if !(status.is_success()) {
+        return Err(AppError::Network(format!("AI 실행 엔진을 내려받지 못했습니다 (코드 {})", status.as_u16())));
+    }
+    let resumed = status.as_u16() == 206 && have > 0;
+    let mut completed = if resumed { have } else { 0 };
+    let total = resp.content_length().and_then(|l| l.checked_add(completed)).unwrap_or(0);
+    if let Some(need) = total.checked_sub(completed) {
+        check_free_space(part.parent().unwrap(), need.saturating_mul(3))?; // 압축 파일 + 압축 해제 여유
+    }
+    let mut file = tokio::fs::OpenOptions::new().create(true).write(true).append(resumed).truncate(!resumed).open(&part).await?;
+    let mut stream = resp.bytes_stream();
+    use futures_util::StreamExt;
+    loop {
+        let chunk = tokio::select! {
+            _ = cancel.cancelled() => { file.flush().await.ok(); return Err(AppError::Cancelled); }
+            c = stream.next() => c,
+        };
+        match chunk {
+            Some(Ok(b)) => {
+                file.write_all(&b).await?;
+                completed += b.len() as u64;
+                on_progress(InstallProgress { stage: "AI 실행 엔진을 내려받는 중".into(), total_bytes: total, completed_bytes: completed, done: false });
+            }
+            Some(Err(_)) => {
+                file.flush().await.ok();
+                return Err(AppError::Network("내려받는 중 연결이 끊겼습니다. 다시 시도하면 이어서 받습니다.".into()));
+            }
+            None => break,
+        }
+    }
+    file.flush().await?;
+    drop(file);
+
+    on_progress(InstallProgress { stage: "내려받은 파일이 올바른지 확인하는 중".into(), total_bytes: total, completed_bytes: completed, done: false });
+    let p = part.to_path_buf();
+    let actual = tokio::task::spawn_blocking(move || sha256_file(&p)).await.map_err(|_| AppError::Other("확인 작업 실패".into()))??;
+    if !actual.eq_ignore_ascii_case(expected.trim()) {
+        let _ = tokio::fs::remove_file(&part).await;
+        return Err(AppError::Blocked("내려받은 엔진 파일이 공식 배포 파일과 일치하지 않아 설치를 중단했습니다".into()));
+    }
+
+    Ok((total, completed, actual))
 }
 
 /// Windows: 앱 프로세스가 끝나면(강제 종료 포함) 엔진과 그 하위 프로세스를 함께 종료하는 Job Object.
@@ -610,6 +648,95 @@ pub fn extract_archive(archive: &Path, file_name: &str, dest: &Path) -> AppResul
 mod tests {
     use super::*;
     use std::io::Write;
+
+    async fn archive_server(responses: Vec<(&'static str, &'static str)>) -> (Url, tokio::task::JoinHandle<Vec<String>>) {
+        use tokio::io::AsyncReadExt;
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let url = Url::parse(&format!("http://{}/archive", listener.local_addr().unwrap())).unwrap();
+        let task = tokio::spawn(async move {
+            let mut requests = Vec::new();
+            for (status, body) in responses {
+                let (mut socket, _) = tokio::time::timeout(Duration::from_secs(5), listener.accept()).await.unwrap().unwrap();
+                let mut request = Vec::new();
+                loop {
+                    let byte = tokio::time::timeout(Duration::from_secs(5), socket.read_u8()).await.unwrap().unwrap();
+                    request.push(byte);
+                    if request.ends_with(b"\r\n\r\n") { break; }
+                    assert!(request.len() < 8192);
+                }
+                requests.push(String::from_utf8(request).unwrap().to_ascii_lowercase());
+                let response = format!("HTTP/1.1 {status}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len());
+                socket.write_all(response.as_bytes()).await.unwrap();
+                socket.shutdown().await.unwrap();
+            }
+            requests
+        });
+        (url, task)
+    }
+
+    #[tokio::test]
+    async fn complete_cached_archive_is_verified_without_network() {
+        let dir = tempfile::tempdir().unwrap();
+        let part = dir.path().join("engine.part");
+        std::fs::write(&part, b"abcdef").unwrap();
+        let hash = sha256_file(&part).unwrap();
+        let (total, done, actual) = download_archive(&part, &hash, || panic!("verified cache must not request a range"), &mut |_| {}, &CancellationToken::new()).await.unwrap();
+        assert_eq!((total, done), (6, 6));
+        assert_eq!(actual, hash);
+    }
+
+    #[tokio::test]
+    async fn unsatisfiable_range_restarts_once_and_keeps_model_files() {
+        let dir = tempfile::tempdir().unwrap();
+        let part = dir.path().join("engine.part");
+        let model = dir.path().join("model");
+        std::fs::write(&model, b"keep me").unwrap();
+        std::fs::write(&part, b"abcdef").unwrap();
+        let hash = sha256_file(&part).unwrap();
+        std::fs::write(&part, b"obsolete oversized partial").unwrap();
+        let (url, server) = archive_server(vec![("416 Range Not Satisfiable", ""), ("200 OK", "abcdef")]).await;
+        let guard = NetGuard::new();
+        let (_, done, _) = download_archive(&part, &hash, || guard.loopback_request(reqwest::Method::GET, &url), &mut |_| {}, &CancellationToken::new()).await.unwrap();
+        assert_eq!(done, 6);
+        assert_eq!(std::fs::read(&part).unwrap(), b"abcdef");
+        assert_eq!(std::fs::read(&model).unwrap(), b"keep me");
+        let requests = server.await.unwrap();
+        assert!(requests[0].contains("range: bytes=26-"));
+        assert!(!requests[1].contains("range:"));
+    }
+
+    #[tokio::test]
+    async fn partial_archive_resumes_or_overwrites_when_range_is_ignored() {
+        for (status, body) in [("206 Partial Content", "def"), ("200 OK", "abcdef")] {
+            let dir = tempfile::tempdir().unwrap();
+            let part = dir.path().join("engine.part");
+            std::fs::write(&part, b"abcdef").unwrap();
+            let hash = sha256_file(&part).unwrap();
+            std::fs::write(&part, b"abc").unwrap();
+            let (url, server) = archive_server(vec![(status, body)]).await;
+            let guard = NetGuard::new();
+            download_archive(&part, &hash, || guard.loopback_request(reqwest::Method::GET, &url), &mut |_| {}, &CancellationToken::new()).await.unwrap();
+            assert_eq!(std::fs::read(&part).unwrap(), b"abcdef");
+            assert!(server.await.unwrap()[0].contains("range: bytes=3-"));
+        }
+    }
+
+    #[tokio::test]
+    async fn repeated_416_is_bounded_and_fallback_still_requires_valid_hash() {
+        for (status, body) in [("416 Range Not Satisfiable", ""), ("200 OK", "tampered")] {
+            let dir = tempfile::tempdir().unwrap();
+            let part = dir.path().join("engine.part");
+            std::fs::write(&part, b"abcdef").unwrap();
+            let hash = sha256_file(&part).unwrap();
+            std::fs::write(&part, b"abc").unwrap();
+            let (url, server) = archive_server(vec![("416 Range Not Satisfiable", ""), (status, body)]).await;
+            let guard = NetGuard::new();
+            let result = download_archive(&part, &hash, || guard.loopback_request(reqwest::Method::GET, &url), &mut |_| {}, &CancellationToken::new()).await;
+            if status.starts_with("416") { assert!(matches!(result, Err(AppError::Network(_)))); }
+            else { assert!(matches!(result, Err(AppError::Blocked(_)))); assert!(!part.exists()); }
+            assert_eq!(server.await.unwrap().len(), 2);
+        }
+    }
 
     #[test]
     fn manifest_is_pinned_to_official_release() {

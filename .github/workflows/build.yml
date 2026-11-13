@@ -68,7 +68,7 @@ jobs:
 
   release:
     # 태그·수동 요청·엔진 복구 브랜치: 검증과 두 운영체제 빌드 성공 후 시험판 게시
-    if: startsWith(github.ref, 'refs/tags/v') || inputs.release_tag != '' || github.ref == 'refs/heads/fix/engine-startup-recovery'
+    if: startsWith(github.ref, 'refs/tags/v') || inputs.release_tag != '' || github.ref == 'refs/heads/fix/engine-download-416'
     needs: bundle
     runs-on: ubuntu-24.04
     permissions:
@@ -86,7 +86,7 @@ jobs:
           printf '%s\n' "${files[@]}"
           [ "${#files[@]}" -ge 2 ] || { echo "설치 파일이 부족합니다"; exit 1; }
           TAG="${{ inputs.release_tag }}"
-          if [ -z "$TAG" ] && [ "$GITHUB_REF_NAME" = "fix/engine-startup-recovery" ]; then TAG="v0.2.2"; fi
+          if [ -z "$TAG" ] && [ "$GITHUB_REF_NAME" = "fix/engine-download-416" ]; then TAG="v0.2.3"; fi
           [ -n "$TAG" ] || TAG="$GITHUB_REF_NAME"
           [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]] || { echo "태그 형식 오류: $TAG"; exit 1; }
           notes="docs/RELEASE_NOTES_${TAG}.md"

@@ -1,7 +1,7 @@
 {
   "name": "philosophy-local-ai",
   "private": true,
-  "version": "0.2.2",
+  "version": "0.2.3",
   "type": "module",
   "description": "Philosophy Local AI — 교수님을 위한 프라이버시 중심 로컬 AI",
   "scripts": {
