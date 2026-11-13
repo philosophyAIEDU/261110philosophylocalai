@@ -2,7 +2,7 @@
 
 0. ~~v0.2.0 릴리스 게시~~ 완료 (2026-11-13). 다음 버전은 Actions → build → Run workflow → release_tag `vX.Y.Z` + docs/RELEASE_NOTES_vX.Y.Z.md, 그리고 site/index.html 링크 갱신.
 0-1. **Windows·macOS 실기에서 v0.2.0 보안 기능 확인**: 잠금 암호 설정→재시작 시 잠금 화면, 키체인에 `pass:v1` 저장,
-   화면 공유 시 창이 빠지는지(교수님 실기에서 캡처 시 사라짐 확인됨, 운영체제별 추가 확인), 작업 관리자에서 앱 강제 종료 시 ollama 종료(Job Object), 앱 내 업데이트로 설치까지.
+    작업 관리자에서 앱 강제 종료 시 ollama 종료(Job Object), 앱 내 업데이트로 설치까지.
 0-2. **업데이트 서명 도입 검토**: 지금은 GitHub HTTPS + SHA-256(같은 출처)에 의존. 저장소 계정 탈취에 대비하려면
    minisign 서명(공개키를 앱에 내장, 비밀키는 GitHub Secrets)으로 릴리스 파일을 서명·검증하도록 확장.
 

@@ -1,4 +1,4 @@
-// 개인정보 보호 설정 화면의 보안 기능 묶음: 보안 점검, 앱 잠금, 화면 보호, 전체 초기화, 보안 수칙
+// 개인정보 보호 설정 화면의 보안 기능 묶음: 보안 점검, 앱 잠금, 전체 초기화, 보안 수칙
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { SecurityCheckup, call, errMsg } from "../lib/api";
 import { Confirm, ErrorNotice, Icon, Notice } from "../lib/ui";
@@ -10,7 +10,7 @@ export const PROFESSOR_RULES: { title: string; body: string }[] = [
   { title: "컴퓨터 디스크 암호화를 켜세요", body: "Windows는 BitLocker(또는 ‘장치 암호화’), Mac은 FileVault를 켜면 노트북을 잃어버려도 저장한 Word·Excel 결과 파일까지 보호됩니다." },
   { title: "필요한 정보만 넣으세요", body: "주민등록번호, 건강·가정 형편 같은 민감정보는 입력하지 마세요. 실명 대신 ‘학생 A’ 같은 별칭을 쓰면 더 안전합니다." },
   { title: "저장한 파일은 따로 보호하세요", body: "Word·Excel로 저장하거나 복사한 내용은 이 앱의 암호화 밖에 있습니다. 공유 폴더·메신저·이메일로 보내기 전에 꼭 필요한지 확인하세요." },
-  { title: "화면 공유에 주의하세요", body: "화상회의 중에는 상담 기록 화면을 열지 마세요. ‘화면 캡처 방지’를 켜 두면 이 앱 창은 화면 공유·캡처에서 사라져 보이거나(투명하게 빠짐) 검게 나옵니다." },
+  { title: "화면 공유·캡처에 주의하세요", body: "화상회의로 화면을 공유하거나 화면을 캡처할 때는 상담 기록이 보이는 화면을 닫아 주세요. 캡처한 이미지에 학생 정보가 담기지 않았는지 꼭 확인하세요." },
   { title: "다 쓴 기록은 지우세요", body: "필요 없어진 상담 기록과 대화는 바로 삭제하세요. 컴퓨터를 반납·폐기할 때는 ‘전체 초기화’를 먼저 하세요." },
   { title: "공식 경로로만 업데이트하세요", body: "업데이트는 이 앱의 ‘앱 업데이트’ 메뉴나 공식 릴리스 페이지에서만 받으세요. 메일·메신저로 받은 설치 파일은 열지 마세요." },
   { title: "학교 규정을 따르세요", body: "학생 개인정보의 수집·이용·보관 기간은 소속 대학의 개인정보 보호 규정과 지침을 따라야 합니다." },
@@ -98,7 +98,6 @@ export default function SecurityPanel() {
     check.has_passcode,
     check.has_passcode && check.auto_lock_minutes > 0,
     check.disk_encryption === "on" || check.disk_encryption === "in_progress",
-    !check.screen_protection_supported || check.screen_protection,
     !check.save_history || check.has_passcode,
     check.pseudonymize_students,
     check.key_store === "os_keychain",
@@ -123,7 +122,6 @@ export default function SecurityPanel() {
               action={!check.has_passcode ? <button className="btn-primary btn-sm shrink-0" onClick={() => setShowPass(true)}>설정하기</button> : undefined} />
             <CheckRow ok={check.has_passcode && check.auto_lock_minutes > 0} title="자동 잠금" desc={check.has_passcode ? (check.auto_lock_minutes > 0 ? `${check.auto_lock_minutes}분 동안 사용하지 않으면 잠급니다.` : "꺼져 있습니다.") : "앱 잠금 암호를 설정하면 쓸 수 있습니다."} />
             <CheckRow ok={disk?.ok ?? null} title="컴퓨터 디스크 암호화 (BitLocker / FileVault)" desc={`${disk?.text ?? "-"} — 저장한 Word·Excel 파일과 다른 문서를 노트북 분실·도난에서 보호합니다.`} />
-            <CheckRow ok={!check.screen_protection_supported ? null : check.screen_protection} title="화면 캡처·화면 공유 방지" desc={!check.screen_protection_supported ? "이 운영체제에서는 지원되지 않습니다." : check.screen_protection ? "켜짐 — 캡처·화면 공유를 하면 이 앱 창이 사라져 보입니다(정상)." : "꺼짐"} />
             <CheckRow ok={!check.save_history || check.has_passcode} title="대화 기록 저장" desc={check.save_history ? (check.has_passcode ? "켜짐 (앱 잠금으로 보호됨)" : "켜짐 — 앱 잠금 없이 대화가 저장되고 있습니다.") : "꺼짐 — 창을 닫으면 대화가 사라집니다."} />
             <CheckRow ok={check.pseudonymize_students} title="학생 기록 가명 처리" desc={check.pseudonymize_students ? "켜짐 — AI에 보낼 때 이름을 ‘학생1’처럼 바꾸고 번호들을 가립니다." : "꺼짐"} />
             <CheckRow ok={check.key_store === "os_keychain"} title="암호화 키 보관" desc={check.key_store === "os_keychain" ? "운영체제 보안 저장소(키체인 / 자격 증명 관리자)에 보관 중" : "파일에 보관 중 (개발용 환경)"} />
@@ -165,15 +163,6 @@ export default function SecurityPanel() {
             {showPass && <PasscodeForm hasPasscode={false} onDone={() => { setShowPass(false); void act(async () => {}, "앱 잠금을 켰습니다. 다음에 앱을 열 때부터 암호를 물어봅니다."); }} />}
           </>
         )}
-      </section>
-
-      <section className="card">
-        <h2 className="h2 mb-1">화면 보호</h2>
-        <label className="flex cursor-pointer items-start justify-between gap-6 py-2">
-          <span><span className="block font-semibold">화면 캡처·화면 공유 방지</span>
-            <span className="block text-[13.5px] text-muted">켜면 Zoom·Teams 화면 공유, 화면 녹화, 캡처를 하는 순간 이 앱 창이 사라져 보이거나(투명하게 빠짐) 검게 나옵니다. 캡처가 끝나면 다시 보입니다. 이 앱 화면을 캡처하거나 수업 중에 보여 주셔야 할 때만 잠시 끄고, 끝나면 다시 켜 주세요. (Windows·Mac)</span></span>
-          <input type="checkbox" className="mt-1.5 h-5 w-5 shrink-0 accent-[var(--purple)]" checked={status.screen_protection} onChange={(e) => act(() => call("set_screen_protection", { enabled: e.target.checked }))} />
-        </label>
       </section>
 
       <section className="card">

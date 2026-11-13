@@ -152,7 +152,6 @@ export default function Onboarding() {
               <ul className="space-y-1 text-[14px]">
                 <li className="flex gap-2"><Icon name="check" className="mt-1 h-4 w-4 shrink-0 text-ok" />AI가 이 컴퓨터 안에서만 실행되고, 자료가 인터넷으로 나가지 않습니다.</li>
                 <li className="flex gap-2"><Icon name="check" className="mt-1 h-4 w-4 shrink-0 text-ok" />저장되는 기록은 모두 암호화됩니다. 대화 기록 저장은 기본으로 꺼져 있습니다.</li>
-                <li className="flex gap-2"><Icon name="check" className="mt-1 h-4 w-4 shrink-0 text-ok" />화상회의 화면 공유·캡처에 이 앱 창이 나타나지 않습니다. (Windows·Mac)</li>
                 <li className="flex gap-2"><Icon name="check" className="mt-1 h-4 w-4 shrink-0 text-ok" />학생 기록을 AI에 보낼 때 이름을 ‘학생1’처럼 가명으로 바꿉니다.</li>
               </ul>
             </div>

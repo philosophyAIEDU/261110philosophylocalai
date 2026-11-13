@@ -144,7 +144,6 @@ struct AppStatus {
     locked: bool,
     has_passcode: bool,
     auto_lock_minutes: u32,
-    screen_protection: bool,
     pseudonymize_students: bool,
     update_consent: bool,
     include_prerelease: bool,
@@ -180,7 +179,6 @@ async fn app_status(state: State<'_, AppState>) -> AppResult<AppStatus> {
         locked: state.store.is_locked(),
         has_passcode: state.keystore.state()? == KeyState::Passcode,
         auto_lock_minutes: secure::auto_lock_minutes(&state.store),
-        screen_protection: state.store.get_bool("screen_protection", true),
         pseudonymize_students: state.store.get_bool("pseudonymize_students", true),
         update_consent: state.guard.update_consent(),
         include_prerelease: state.store.get_bool("include_prerelease", true),
@@ -761,10 +759,6 @@ pub fn run() {
         .setup(|app| {
             let data_dir = app.path().app_local_data_dir().map_err(|_| AppError::Storage("앱 데이터 폴더를 찾을 수 없습니다".into()))?;
             let state = build_state(data_dir)?;
-            // 화면 캡처·화면 공유 방지 (Windows·macOS). 기본으로 켠다.
-            if let Some(w) = app.get_webview_window("main") {
-                let _ = w.set_content_protected(state.store.get_bool("screen_protection", true));
-            }
             app.manage(state);
             secure::spawn_auto_lock(app.handle().clone());
             // macOS/Linux: 종료 신호(로그아웃·시스템 종료·kill)를 받아도 엔진을 정리하고 끝낸다.
@@ -827,7 +821,6 @@ pub fn run() {
             secure::set_passcode,
             secure::remove_passcode,
             secure::set_auto_lock,
-            secure::set_screen_protection,
             secure::set_pseudonymize,
             secure::factory_reset,
             secure::security_checkup,

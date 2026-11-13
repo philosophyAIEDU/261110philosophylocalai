@@ -24,7 +24,7 @@ export function installPreviewBackend() {
   const state = {
     onboarding_done: q.has("app"), installed: q.has("app") ? ["qwen3:8b"] : ([] as string[]), selected: q.has("app") ? "qwen3:8b" : (null as string | null),
     save_history: false, consent: false, cancelled: new Set<string>(),
-    locked: q.has("locked"), has_passcode: q.has("locked") || q.has("pass"), auto_lock: 10, screen: true, pseudo: true, update_consent: false, include_pre: true,
+    locked: q.has("locked"), has_passcode: q.has("locked") || q.has("pass"), auto_lock: 10, pseudo: true, update_consent: false, include_pre: true,
     notes: [{ id: "n1", student: "학생 A", date: "2026-11-03", content: "진로 고민. 대학원 진학과 취업 사이에서 결정을 어려워함." }, { id: "n2", student: "학생 B", date: "2026-10-28", content: "아르바이트 병행으로 과제 제출이 늦어짐." }],
   };
   const stream = async (jobId: string, text: string) => {
@@ -43,17 +43,16 @@ export function installPreviewBackend() {
 
   const handlers: Record<string, (a: any) => any> = {
     app_status: () => ({ app_version: "0.2.0", engine: { installed: state.installed.length > 0, version: "0.40.16", running: state.installed.length > 0, port: 41000, installable: true }, engine_name: "Ollama 0.40.16", selected_model: state.selected, onboarding_done: state.onboarding_done, download_consent: state.consent, save_history: state.save_history, purpose: "general",
-      locked: state.locked, has_passcode: state.has_passcode, auto_lock_minutes: state.auto_lock, screen_protection: state.screen, pseudonymize_students: state.pseudo, update_consent: state.update_consent, include_prerelease: state.include_pre }),
+      locked: state.locked, has_passcode: state.has_passcode, auto_lock_minutes: state.auto_lock, pseudonymize_students: state.pseudo, update_consent: state.update_consent, include_prerelease: state.include_pre }),
     unlock_app: async (a) => { await sleep(300); if (a.passcode !== "연구실커피는3시") throw { code: "wrong_passcode", message: "잠금 암호가 맞지 않습니다" }; state.locked = false; },
     lock_app: () => { state.locked = true; emit("app-locked", null); },
     user_activity: () => {},
     set_passcode: () => { state.has_passcode = true; },
     remove_passcode: () => { state.has_passcode = false; },
     set_auto_lock: (a) => { state.auto_lock = a.minutes; },
-    set_screen_protection: (a) => { state.screen = a.enabled; },
     set_pseudonymize: (a) => { state.pseudo = a.enabled; },
     factory_reset: () => { state.onboarding_done = false; state.locked = false; state.has_passcode = false; },
-    security_checkup: () => ({ disk_encryption: "unknown", key_store: "os_keychain", has_passcode: state.has_passcode, auto_lock_minutes: state.auto_lock, screen_protection: state.screen, screen_protection_supported: true, save_history: state.save_history, pseudonymize_students: state.pseudo, download_consent: state.consent, update_consent: state.update_consent }),
+    security_checkup: () => ({ disk_encryption: "unknown", key_store: "os_keychain", has_passcode: state.has_passcode, auto_lock_minutes: state.auto_lock, save_history: state.save_history, pseudonymize_students: state.pseudo, download_consent: state.consent, update_consent: state.update_consent }),
     pick_document: () => ({ id: "d" + Math.random(), file_name: "강의자료.pdf", kind: "pdf", char_count: 18234, units: 24, warnings: [], preview: "" }),
     pick_table: () => handlers.load_table({}),
     reload_table_sheet: () => handlers.load_table({}),
