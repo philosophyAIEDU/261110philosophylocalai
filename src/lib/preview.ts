@@ -22,7 +22,7 @@ export function installPreviewBackend() {
   const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
   const q = new URLSearchParams(location.search);
   const state = {
-    onboarding_done: q.has("app"), installed: q.has("app") ? ["qwen3:8b"] : ([] as string[]), selected: q.has("app") ? "qwen3:8b" : (null as string | null),
+    onboarding_done: q.has("app"), installed: q.has("app") || q.has("reinstall") ? ["qwen3:8b"] : ([] as string[]), selected: q.has("app") ? "qwen3:8b" : (null as string | null),
     save_history: false, consent: false, cancelled: new Set<string>(),
     locked: q.has("locked"), has_passcode: q.has("locked") || q.has("pass"), auto_lock: 10, pseudo: true, update_consent: false, include_pre: true,
     notes: [{ id: "n1", student: "학생 A", date: "2026-11-03", content: "진로 고민. 대학원 진학과 취업 사이에서 결정을 어려워함." }, { id: "n2", student: "학생 B", date: "2026-10-28", content: "아르바이트 병행으로 과제 제출이 늦어짐." }],
@@ -42,7 +42,7 @@ export function installPreviewBackend() {
     { name: "기말", kind: "numeric", count: 4, missing: 1, unique: 4, numeric: { mean: 82.5, median: 85, std_dev: 17.08, min: 60, max: 100, sum: 330 }, top_values: [], non_numeric: 0 } ] };
 
   const handlers: Record<string, (a: any) => any> = {
-    app_status: () => ({ app_version: "0.2.0", engine: { installed: state.installed.length > 0, version: "0.40.16", running: state.installed.length > 0, port: 41000, installable: true }, engine_name: "Ollama 0.40.16", selected_model: state.selected, onboarding_done: state.onboarding_done, download_consent: state.consent, save_history: state.save_history, purpose: "general",
+    app_status: () => ({ app_version: "0.2.0", engine: { installed: state.installed.length > 0 || q.has("reinstall"), version: "0.40.16", running: state.installed.length > 0, port: 41000, installable: true }, engine_name: "Ollama 0.40.16", selected_model: state.selected, onboarding_done: state.onboarding_done, download_consent: state.consent, save_history: state.save_history, purpose: "general",
       locked: state.locked, has_passcode: state.has_passcode, auto_lock_minutes: state.auto_lock, pseudonymize_students: state.pseudo, update_consent: state.update_consent, include_prerelease: state.include_pre }),
     unlock_app: async (a) => { await sleep(300); if (a.passcode !== "연구실커피는3시") throw { code: "wrong_passcode", message: "잠금 암호가 맞지 않습니다" }; state.locked = false; },
     lock_app: () => { state.locked = true; emit("app-locked", null); },

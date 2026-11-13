@@ -709,9 +709,10 @@ fn build_state(data_dir: PathBuf) -> AppResult<AppState> {
     let db_path = data_dir.join("app.db");
     let store = Store::open_locked(&db_path)?;
     match keystore.state()? {
-        // 첫 실행 (또는 키가 사라진 경우): 새 키를 만든다. 키 없이 남은 기록은 어차피 읽을 수 없으므로 지운다.
+        // 첫 실행 (또는 키가 사라진 경우): 새 키를 만든다. 키 없이 남은 암호화 기록은 읽을 수 없으므로 지우되,
+        // 설정(선택한 AI 모델, 첫 설정 완료 여부)은 남겨 AI를 다시 받으라고 묻지 않게 한다.
         KeyState::NoKey => {
-            store.erase_all()?;
+            store.erase_encrypted()?;
             store.unlock(keystore.create_plain()?);
         }
         KeyState::Plain => store.unlock(keystore.open_plain()?),

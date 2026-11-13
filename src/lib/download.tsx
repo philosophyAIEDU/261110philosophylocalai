@@ -1,7 +1,7 @@
 // AI 모델 원클릭 내려받기 흐름:
 // 동의 확인 → (필요 시) 실행 엔진 설치 → 엔진 시작 → 모델 내려받기 → 무결성 확인 → 실행 테스트 → 선택
 import { useEffect, useRef, useState } from "react";
-import { CatalogModel, Progress, call, errCode, errMsg, fmtBytes, newJobId, on } from "./api";
+import { CatalogModel, InstalledModel, Progress, call, errCode, errMsg, fmtBytes, newJobId, on } from "./api";
 import { ErrorNotice, Icon, Notice, ProgressBar } from "./ui";
 import { useApp } from "../App";
 
@@ -17,6 +17,23 @@ export function DownloadFlow({ model, onDone, doneLabel = "AI 사용 시작하�
   const [testReply, setTestReply] = useState<{ reply: string; tokens_per_sec: number | null } | null>(null);
   const jobRef = useRef<string | null>(null);
   const lastRef = useRef<{ t: number; b: number } | null>(null);
+  const [alreadyInstalled, setAlreadyInstalled] = useState(false);
+
+  // 이 AI가 이미 이 컴퓨터에 있으면 다시 내려받지 않는다.
+  useEffect(() => {
+    if (!status.engine.installed) return;
+    let alive = true;
+    call<InstalledModel[]>("list_models")
+      .then((list) => { if (alive) setAlreadyInstalled(list.some((m) => m.name === model.id && !m.is_remote)); })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, [model.id, status.engine.installed]);
+
+  const useInstalled = async () => {
+    setError(null);
+    try { await call("select_model", { name: model.id }); await refresh(); onDone(); }
+    catch (e) { setError(errMsg(e)); }
+  };
 
   useEffect(() => {
     const handle = (p: { job_id: string; progress: Progress }) => {
@@ -79,7 +96,13 @@ export function DownloadFlow({ model, onDone, doneLabel = "AI 사용 시작하�
 
   return (
     <div className="space-y-4">
-      {phase === "idle" || phase === "error" ? (
+      {alreadyInstalled && (phase === "idle" || phase === "error") ? (
+        <>
+          <Notice tone="ok" title="이미 이 컴퓨터에 있는 AI입니다">다시 내려받을 필요가 없습니다. 아래 버튼을 누르면 바로 사용할 수 있습니다.</Notice>
+          <ErrorNotice error={error} />
+          <button className="btn-primary w-full py-3 text-[15.5px]" onClick={useInstalled}>이 AI 사용하기</button>
+        </>
+      ) : phase === "idle" || phase === "error" ? (
         <>
           <div className="rounded-xl bg-surface-2 px-4 py-3 text-[14px]">
             <div className="mb-1 font-bold">내려받기 안내</div>

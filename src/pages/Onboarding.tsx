@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { HardwareReport, Purpose, Recommendation, RecommendationResult, call, errMsg } from "../lib/api";
+import { HardwareReport, InstalledModel, Purpose, Recommendation, RecommendationResult, call, errMsg } from "../lib/api";
 import { ErrorNotice, Icon, Notice, SecurityTip } from "../lib/ui";
 import { HardwareSummary, RecommendationCard, ReasonList } from "../lib/modelcard";
 import { DownloadFlow } from "../lib/download";
@@ -14,7 +14,8 @@ export const PURPOSES: { id: Purpose; label: string; desc: string }[] = [
 ];
 
 export default function Onboarding() {
-  const { refresh } = useApp();
+  const { refresh, status } = useApp();
+  const [installed, setInstalled] = useState<InstalledModel[]>([]);
   const [step, setStep] = useState(0);
   const [hw, setHw] = useState<HardwareReport | null>(null);
   const [purpose, setPurpose] = useState<Purpose>("general");
@@ -25,6 +26,12 @@ export default function Onboarding() {
   useEffect(() => {
     if (step === 1 && !hw) call<HardwareReport>("detect_hardware").then(setHw).catch((e) => setError(errMsg(e)));
   }, [step, hw]);
+
+  // 이미 받은 AI가 있으면 다시 내려받지 않고 바로 쓸 수 있게 한다 (재설치·초기화 후 등)
+  useEffect(() => {
+    if (step !== 2 || !status.engine.installed) return;
+    call<InstalledModel[]>("list_models").then((l) => setInstalled(l.filter((m) => !m.is_remote))).catch(() => {});
+  }, [step, status.engine.installed]);
 
   useEffect(() => {
     if (step !== 2) return;
@@ -106,12 +113,18 @@ export default function Onboarding() {
                 </button>
               ))}
             </div>
+            {installed.length > 0 && (
+              <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-ok/25 bg-ok-soft px-4 py-3 text-[14px]">
+                <span><b>이미 이 컴퓨터에 받은 AI가 있습니다:</b> {installed.map((m) => m.name).join(", ")}. 다시 내려받을 필요가 없습니다.</span>
+                <button className="btn-primary btn-sm shrink-0" onClick={async () => { try { await call("select_model", { name: installed[0].name }); await refresh(); setStep(4); } catch (e) { setError(errMsg(e)); } }}>이 AI로 바로 시작</button>
+              </div>
+            )}
             {recs && recs.recommendations.length === 0 && <Notice tone="warn">{recs.explanation}</Notice>}
             {recs && recs.recommendations.length > 0 && (
               <>
                 <div className={`mb-5 grid gap-4 ${recs.recommendations.length === 3 ? "md:grid-cols-3" : "md:grid-cols-2"}`}>
                   {recs.recommendations.map((r) => (
-                    <RecommendationCard key={r.assessment.model.id} rec={r} selected={picked?.assessment.model.id === r.assessment.model.id} onSelect={() => setPicked(r)} />
+                    <RecommendationCard key={r.assessment.model.id} rec={r} installed={installed.some((m) => m.name === r.assessment.model.id)} selected={picked?.assessment.model.id === r.assessment.model.id} onSelect={() => setPicked(r)} />
                   ))}
                 </div>
                 {picked && <div className="card mb-5"><ReasonList rec={picked} /></div>}
