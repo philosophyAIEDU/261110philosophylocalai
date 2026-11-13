@@ -34,8 +34,16 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          windows=$(find release-files -type f -name Philosophy.Local.AI_0.2.1_x64-setup.exe)
-          mac=$(find release-files -type f -name Philosophy.Local.AI_0.2.1_universal.dmg)
+          find release-files -type f
+          mapfile -t windows_files < <(find release-files -type f -name '*.exe')
+          mapfile -t mac_files < <(find release-files -type f -name '*.dmg')
+          test "${#windows_files[@]}" -eq 1
+          test "${#mac_files[@]}" -eq 1
+          mkdir release-assets
+          windows=release-assets/Philosophy.Local.AI_0.2.1_x64-setup.exe
+          mac=release-assets/Philosophy.Local.AI_0.2.1_universal.dmg
+          cp "${windows_files[0]}" "$windows"
+          cp "${mac_files[0]}" "$mac"
           test -s "$windows"
           test -s "$mac"
           sha256sum "$windows" "$mac"
