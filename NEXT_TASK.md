@@ -1,5 +1,13 @@
 # NEXT_TASK — 다음 작업 (순서대로)
 
+0. **v0.2.0 릴리스 게시**: GitHub Actions → build → Run workflow → release_tag `v0.2.0` (릴리스 노트: docs/RELEASE_NOTES_v0.2.0.md).
+   게시 후 site/index.html의 내려받기 링크 3곳을 v0.2.0으로 바꾼다.
+0-1. **Windows·macOS 실기에서 v0.2.0 보안 기능 확인**: 잠금 암호 설정→재시작 시 잠금 화면, 키체인에 `pass:v1` 저장,
+   화면 공유 시 창이 검게 나오는지, 작업 관리자에서 앱 강제 종료 시 ollama 종료(Job Object), 앱 내 업데이트로 설치까지.
+0-2. **업데이트 서명 도입 검토**: 지금은 GitHub HTTPS + SHA-256(같은 출처)에 의존. 저장소 계정 탈취에 대비하려면
+   minisign 서명(공개키를 앱에 내장, 비밀키는 GitHub Secrets)으로 릴리스 파일을 서명·검증하도록 확장.
+
+
 1. **실제 모델 검증** (registry.ollama.ai 접근 가능한 환경, 이 개발 컨테이너에서는 차단됨)
    - 앱 온보딩으로 `gemma3:4b` 또는 `qwen3:4b` 내려받기 → 실행 테스트 통과 확인
    - 인터넷을 끊고: 채팅, 한국어 PDF 강의자료 요약, Excel 보고서 생성

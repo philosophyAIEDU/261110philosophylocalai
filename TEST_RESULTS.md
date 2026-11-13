@@ -1,4 +1,15 @@
-# TEST_RESULTS — 테스트 결과 (2026-11-11)
+# TEST_RESULTS — 테스트 결과
+
+## v0.2.0 (2026-11-13, Linux 개발 컨테이너)
+- `cargo test -p pla-core --features fake-engine`: 단위 77 · 통합 11 · 한국어 PDF 1 · 정적 보안 7 · 기타 통과
+- `cargo test -p philosophy-local-ai`: 저장 파일 이름 정화 테스트 통과
+- `bash scripts/security-tests.sh`: 5/5 (네트워크 차단 공간에서 9개 테스트 묶음 통과, strace 외부 연결 없음)
+- 실제 GitHub 업데이트 테스트(`PLA_REAL_UPDATE=1 … --test real_update`): 확인·내려받기·SHA-256 검증 통과
+- 실제 앱(xvfb): 잠금 시작/틀린 암호/해제/기록 표시/1분 자동 잠금, Rust 파일 선택 창으로 CSV 불러오기 통과
+- 브라우저 미리보기: 잠금 화면, 보안 점검, 앱 업데이트, 학생 가명 처리, 온보딩 안전 설정 — 콘솔 오류 없음
+- 미검증: Windows·macOS 실기(화면 캡처 방지, 키체인, Job Object, 설치 파일 실행), 실제 AI 모델
+
+## (이전) 2026-11-11
 
 ## 1. 자동 테스트
 
