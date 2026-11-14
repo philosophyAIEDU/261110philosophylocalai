@@ -121,6 +121,14 @@ impl Store {
         self.current_cipher()?.decrypt(s)
     }
 
+    /// 암호화된 기록(대화·상담)만 지운다. 설정(선택한 AI 모델, 첫 설정 완료 여부 등)은 남긴다.
+    /// 암호화 키가 사라져 기존 기록을 읽을 수 없게 된 경우에 사용한다.
+    pub fn erase_encrypted(&self) -> AppResult<()> {
+        let c = self.conn.lock().unwrap();
+        c.execute_batch("DELETE FROM messages; DELETE FROM conversations; DELETE FROM student_notes; DELETE FROM settings WHERE key = 'has_passcode'; VACUUM;")?;
+        Ok(())
+    }
+
     /// 설정을 포함한 모든 기록을 지우고 파일을 정리한다 (전체 초기화용).
     /// 키 파기와 함께 쓰면, 이전에 만들어진 백업 사본도 읽을 수 없게 된다(암호학적 삭제).
     pub fn erase_all(&self) -> AppResult<()> {
@@ -371,6 +379,20 @@ mod tests {
         assert_eq!(s.get_setting("k").unwrap().as_deref(), Some("v"));
         s.unlock(key);
         assert_eq!(s.list_conversations(None).unwrap().len(), 1);
+    }
+
+    #[test]
+    fn erase_encrypted_keeps_settings() {
+        let (_d, s) = store();
+        s.add_student_note("김학생", "2026-01-01", "x").unwrap();
+        s.set_setting("onboarding_done", "true").unwrap();
+        s.set_setting("selected_model", "gemma3:4b").unwrap();
+        s.set_setting("has_passcode", "true").unwrap();
+        s.erase_encrypted().unwrap();
+        assert_eq!(s.stats().unwrap().student_notes, 0);
+        assert_eq!(s.get_setting("onboarding_done").unwrap().as_deref(), Some("true"));
+        assert_eq!(s.get_setting("selected_model").unwrap().as_deref(), Some("gemma3:4b"));
+        assert!(s.get_setting("has_passcode").unwrap().is_none());
     }
 
     #[test]

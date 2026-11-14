@@ -111,7 +111,7 @@ export default function Students() {
           <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1">{aliases.map((a) => <span key={a.alias}>{a.alias} = {a.original}</span>)}</div>
         </div>
       ) : undefined} />
-      <SecurityTip>상담 기록 화면을 다른 사람에게 보여 주거나 화상회의에서 화면을 공유하지 마세요. ‘화면 캡처 방지’가 켜져 있으면 이 앱 창은 화면 공유·캡처에 검게 나옵니다.</SecurityTip>
+      <SecurityTip>상담 기록 화면을 다른 사람에게 보여 주거나 화상회의에서 화면을 공유하지 마세요. 화면을 캡처할 때는 상담 기록이 보이지 않는지 먼저 확인해 주세요.</SecurityTip>
 
       <Confirm open={!!toDelete} danger title="상담 기록을 삭제할까요?" confirmLabel="삭제" body="이 기록이 이 컴퓨터에서 완전히 삭제됩니다. 되돌릴 수 없습니다."
         onCancel={() => setToDelete(null)}

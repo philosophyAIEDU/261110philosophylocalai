@@ -31,13 +31,13 @@ export interface EngineStatus { installed: boolean; version: string; running: bo
 export interface AppStatus {
   app_version: string; engine: EngineStatus; engine_name: string; selected_model: string | null;
   onboarding_done: boolean; download_consent: boolean; save_history: boolean; purpose: Purpose;
-  locked: boolean; has_passcode: boolean; auto_lock_minutes: number; screen_protection: boolean;
+  locked: boolean; has_passcode: boolean; auto_lock_minutes: number;
   pseudonymize_students: boolean; update_consent: boolean; include_prerelease: boolean;
 }
 export type DiskEncryption = "on" | "off" | "in_progress" | "unknown";
 export interface SecurityCheckup {
   disk_encryption: DiskEncryption; key_store: "os_keychain" | "key_file"; has_passcode: boolean; auto_lock_minutes: number;
-  screen_protection: boolean; screen_protection_supported: boolean; save_history: boolean; pseudonymize_students: boolean;
+  save_history: boolean; pseudonymize_students: boolean;
   download_consent: boolean; update_consent: boolean;
 }
 export interface Alias { alias: string; original: string }

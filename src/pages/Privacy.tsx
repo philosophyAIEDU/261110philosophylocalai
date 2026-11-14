@@ -3,6 +3,7 @@ import { PrivacyInfo, call, errMsg, fmtBytes } from "../lib/api";
 import { Confirm, ErrorNotice, Icon, Notice, PageHeader } from "../lib/ui";
 import { useApp } from "../App";
 import SecurityPanel from "./SecurityPanel";
+import { EngineRecovery } from "../lib/engine-recovery";
 
 function Toggle({ checked, onChange, label, desc }: { checked: boolean; onChange: (v: boolean) => void; label: string; desc: string }) {
   return (
@@ -18,7 +19,8 @@ function Toggle({ checked, onChange, label, desc }: { checked: boolean; onChange
 }
 
 export default function Privacy() {
-  const { local, refresh, status } = useApp();
+  const { local, engineError, refresh, status } = useApp();
+  const [checking, setChecking] = useState(false);
   const [info, setInfo] = useState<PrivacyInfo | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [confirm, setConfirm] = useState<"conversations" | "all" | null>(null);
@@ -43,7 +45,7 @@ export default function Privacy() {
       <section className="card">
         <div className="mb-3 flex items-center justify-between gap-3">
           <h2 className="h2">로컬 전용 실행 상태</h2>
-          <button className="btn-ghost btn-sm" onClick={() => act(async () => {})}>다시 확인</button>
+          <button className="btn-ghost btn-sm" disabled={checking} onClick={async () => { setChecking(true); try { await act(async () => {}); } finally { setChecking(false); } }}>{checking ? "확인 중…" : "다시 확인"}</button>
         </div>
         <div className={`mb-3 flex items-center gap-3 rounded-xl px-4 py-3 ${local?.verified ? "bg-ok-soft" : "bg-warn-soft"}`}>
           <Icon name={local?.verified ? "lock" : "alert"} className={`h-6 w-6 ${local?.verified ? "text-ok" : "text-warn"}`} />
@@ -53,10 +55,14 @@ export default function Privacy() {
           </div>
         </div>
         <ul className="space-y-1.5 text-[14px]">
-          {(local?.details ?? ["AI 엔진이 실행 중이 아닙니다. AI 모델을 준비하면 확인할 수 있습니다."]).map((d, i) => (
+          {(local?.details ?? [status.engine.installed
+            ? "AI 실행 엔진이 멈춰 있어 로컬 전용 상태를 검사하지 못했습니다. 이 안내가 모델 파일이 없다는 뜻은 아닙니다."
+            : "이 앱의 AI 실행 엔진이 설치되어 있지 않습니다. 모델 관리에서 기존 모델을 확인하고 필요한 엔진을 설치해 주세요."]).map((d, i) => (
             <li key={i} className="flex gap-2"><Icon name={d.startsWith("확인됨") ? "check" : "info"} className={`mt-1 h-4 w-4 shrink-0 ${d.startsWith("확인됨") ? "text-ok" : "text-warn"}`} />{d}</li>
           ))}
         </ul>
+        {engineError && <div className="mt-3"><ErrorNotice error={`AI 실행 엔진 시작 실패: ${engineError}`} /></div>}
+        <div className="mt-4"><EngineRecovery onRecovered={load} /></div>
       </section>
 
       <section className="card">

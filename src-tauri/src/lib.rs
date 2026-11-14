@@ -144,7 +144,6 @@ struct AppStatus {
     locked: bool,
     has_passcode: bool,
     auto_lock_minutes: u32,
-    screen_protection: bool,
     pseudonymize_students: bool,
     update_consent: bool,
     include_prerelease: bool,
@@ -180,7 +179,6 @@ async fn app_status(state: State<'_, AppState>) -> AppResult<AppStatus> {
         locked: state.store.is_locked(),
         has_passcode: state.keystore.state()? == KeyState::Passcode,
         auto_lock_minutes: secure::auto_lock_minutes(&state.store),
-        screen_protection: state.store.get_bool("screen_protection", true),
         pseudonymize_students: state.store.get_bool("pseudonymize_students", true),
         update_consent: state.guard.update_consent(),
         include_prerelease: state.store.get_bool("include_prerelease", true),
@@ -261,20 +259,36 @@ async fn start_engine(state: State<'_, AppState>) -> AppResult<u16> {
 
 #[tauri::command]
 async fn list_models(state: State<'_, AppState>) -> AppResult<Vec<InstalledModel>> {
+    // 엔진이 없거나(재설치 직후) 시작하지 못해도, 앱 모델 폴더에 남아 있는 AI를 직접 확인한다.
+    // 그래야 이미 받은 AI를 다시 내려받으라고 묻지 않는다.
+    let on_disk = || {
+        let dir = state.engine.models_dir();
+        let catalog = state.catalog.clone();
+        tauri::async_runtime::spawn_blocking(move || pla_core::runtime::local_models::discover(&dir, &catalog))
+    };
     if !state.engine.is_installed() {
-        return Ok(vec![]);
+        return on_disk().await.map_err(|_| E::Other("기존 AI 파일을 확인하지 못했습니다".into()));
     }
-    state.runtime().await?.list_models().await
+    match state.runtime().await {
+        Ok(rt) => rt.list_models().await,
+        Err(e) => {
+            let found = on_disk().await.unwrap_or_default();
+            if found.is_empty() { Err(e) } else { Ok(found) }
+        }
+    }
 }
 
 #[tauri::command]
 async fn pull_model(app: AppHandle, state: State<'_, AppState>, job_id: String, name: String) -> AppResult<()> {
     let model = state.catalog.get(&name).ok_or_else(|| E::Blocked("앱에 등록된 로컬 모델만 내려받을 수 있습니다".into()))?;
+    let rt = state.runtime().await?;
+    if rt.list_models().await?.iter().any(|m| m.name == name && !m.is_remote) {
+        return Ok(());
+    }
     // 저장 공간 확인 (다운로드 용량 + 여유 2GB)
     let models_dir = state.engine.models_dir();
     std::fs::create_dir_all(&models_dir)?;
     check_free_space(&models_dir, ((model.download_gb * 1.1 + 2.0) * 1e9) as u64)?;
-    let rt = state.runtime().await?;
     let cancel = state.register_job(&job_id);
     let jid = job_id.clone();
     let res = rt
@@ -711,9 +725,10 @@ fn build_state(data_dir: PathBuf) -> AppResult<AppState> {
     let db_path = data_dir.join("app.db");
     let store = Store::open_locked(&db_path)?;
     match keystore.state()? {
-        // 첫 실행 (또는 키가 사라진 경우): 새 키를 만든다. 키 없이 남은 기록은 어차피 읽을 수 없으므로 지운다.
+        // 첫 실행 (또는 키가 사라진 경우): 새 키를 만든다. 키 없이 남은 암호화 기록은 읽을 수 없으므로 지우되,
+        // 설정(선택한 AI 모델, 첫 설정 완료 여부)은 남겨 AI를 다시 받으라고 묻지 않게 한다.
         KeyState::NoKey => {
-            store.erase_all()?;
+            store.erase_encrypted()?;
             store.unlock(keystore.create_plain()?);
         }
         KeyState::Plain => store.unlock(keystore.open_plain()?),
@@ -761,10 +776,6 @@ pub fn run() {
         .setup(|app| {
             let data_dir = app.path().app_local_data_dir().map_err(|_| AppError::Storage("앱 데이터 폴더를 찾을 수 없습니다".into()))?;
             let state = build_state(data_dir)?;
-            // 화면 캡처·화면 공유 방지 (Windows·macOS). 기본으로 켠다.
-            if let Some(w) = app.get_webview_window("main") {
-                let _ = w.set_content_protected(state.store.get_bool("screen_protection", true));
-            }
             app.manage(state);
             secure::spawn_auto_lock(app.handle().clone());
             // macOS/Linux: 종료 신호(로그아웃·시스템 종료·kill)를 받아도 엔진을 정리하고 끝낸다.
@@ -827,7 +838,6 @@ pub fn run() {
             secure::set_passcode,
             secure::remove_passcode,
             secure::set_auto_lock,
-            secure::set_screen_protection,
             secure::set_pseudonymize,
             secure::factory_reset,
             secure::security_checkup,

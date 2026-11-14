@@ -55,6 +55,13 @@ async fn real_ollama_install_start_local_only_and_cleanup() {
     assert!(engine.is_installed());
     guard.set_download_consent(false);
 
+    // 2-1) 앱 모델 폴더에 Ollama 0.40.x 방식(manifests-v2 + blob)으로 모델을 둔다.
+    //      실제 엔진과 앱의 "이미 받은 AI" 확인이 같은 모델을 보는지 검증한다.
+    let models = engine.models_dir();
+    let fake = make_v2_model(&models, "gemma3", "4b");
+    let found = pla_core::runtime::local_models::discover(&models, &Catalog::builtin());
+    assert!(found.iter().any(|m| m.name == "gemma3:4b"), "엔진 없이도 이미 받은 모델을 찾아야 함: {found:?}");
+
     // 3) 실행
     let port = engine.start().await.expect("엔진 시작");
     let rt = OllamaRuntime::new(port, guard.clone(), Catalog::builtin().allowed_ids());
@@ -73,8 +80,11 @@ async fn real_ollama_install_start_local_only_and_cleanup() {
     eprintln!("{:?}", report.details);
     assert!(report.cloud_disabled && report.loopback_only);
 
-    // 5) 모델 목록 (빈 앱 전용 모델 폴더)
-    assert!(rt.list_models().await.unwrap().iter().all(|m| !m.is_remote));
+    // 5) 실제 엔진도 같은 모델을 본다
+    let listed = rt.list_models().await.unwrap();
+    eprintln!("engine sees: {:?}", listed.iter().map(|m| &m.name).collect::<Vec<_>>());
+    assert!(listed.iter().any(|m| m.name == "gemma3:4b" && !m.is_remote), "실제 엔진이 v2 저장 구조의 모델을 봐야 함");
+    let _ = fake;
 
     // 6) 클라우드 모델은 엔진에 보내기 전에 차단
     let e = rt.complete(ChatRequest { model: "gpt-oss:120b-cloud".into(), messages: vec![ChatMessage::user("x")], num_ctx: None, temperature: None }, CancellationToken::new()).await;
@@ -100,4 +110,31 @@ async fn real_ollama_install_start_local_only_and_cleanup() {
     assert!(!can_connect(SocketAddr::from(([127, 0, 0, 1], port))));
     let alive = std::fs::read_to_string(format!("/proc/{pid}/stat")).map(|s| !s.contains(") Z ")).unwrap_or(false);
     assert!(!alive, "엔진 프로세스가 남아 있음");
+}
+
+/// Ollama 0.40.x가 모델을 받았을 때와 같은 저장 구조를 만든다:
+/// blobs/sha256-<해시> 에 config·가중치·매니페스트를 두고, manifests-v2/ollama.com/library/<모델>/<태그> 가 매니페스트 blob을 가리킨다.
+fn make_v2_model(root: &std::path::Path, model: &str, tag: &str) -> Vec<std::path::PathBuf> {
+    use sha2::{Digest, Sha256};
+    let blobs = root.join("blobs");
+    std::fs::create_dir_all(&blobs).unwrap();
+    let put = |data: &[u8]| {
+        let hex = hex::encode(Sha256::digest(data));
+        let p = blobs.join(format!("sha256-{hex}"));
+        std::fs::write(&p, data).unwrap();
+        (format!("sha256:{hex}"), data.len(), p)
+    };
+    let (cd, cs, cp) = put(br#"{"model_format":"gguf","model_family":"gemma3","model_type":"4.3B","file_type":"Q4_K_M"}"#);
+    let (ld, ls, lp) = put(b"not-a-real-gguf-test-weights");
+    let manifest = serde_json::json!({"schemaVersion": 2, "mediaType": "application/vnd.docker.distribution.manifest.v2+json",
+        "config": {"mediaType": "application/vnd.docker.container.image.v1+json", "digest": cd, "size": cs},
+        "layers": [{"mediaType": "application/vnd.ollama.image.model", "digest": ld, "size": ls}]}).to_string();
+    let (_md, _ms, mp) = put(manifest.as_bytes());
+    let dir = root.join("manifests-v2/ollama.com/library").join(model);
+    std::fs::create_dir_all(&dir).unwrap();
+    #[cfg(unix)]
+    std::os::unix::fs::symlink(std::path::Path::new("../../../../blobs").join(mp.file_name().unwrap()), dir.join(tag)).unwrap();
+    #[cfg(not(unix))]
+    std::fs::copy(&mp, dir.join(tag)).unwrap();
+    vec![cp, lp, mp]
 }

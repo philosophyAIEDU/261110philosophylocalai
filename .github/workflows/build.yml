@@ -67,8 +67,8 @@ jobs:
           if-no-files-found: error
 
   release:
-    # 태그(v*)를 푸시했을 때만: 테스트·보안 검사·두 운영체제 빌드가 모두 성공한 뒤 사전 출시로 게시
-    if: startsWith(github.ref, 'refs/tags/v') || inputs.release_tag != ''
+    # 태그·수동 요청·엔진 복구 브랜치: 검증과 두 운영체제 빌드 성공 후 시험판 게시
+    if: startsWith(github.ref, 'refs/tags/v') || inputs.release_tag != '' || github.ref == 'refs/heads/fix/engine-download-416'
     needs: bundle
     runs-on: ubuntu-24.04
     permissions:
@@ -86,14 +86,25 @@ jobs:
           printf '%s\n' "${files[@]}"
           [ "${#files[@]}" -ge 2 ] || { echo "설치 파일이 부족합니다"; exit 1; }
           TAG="${{ inputs.release_tag }}"
+          if [ -z "$TAG" ] && [ "$GITHUB_REF_NAME" = "fix/engine-download-416" ]; then TAG="v0.2.3"; fi
           [ -n "$TAG" ] || TAG="$GITHUB_REF_NAME"
           [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]] || { echo "태그 형식 오류: $TAG"; exit 1; }
           notes="docs/RELEASE_NOTES_${TAG}.md"
           [ -f "$notes" ] || { echo "릴리스 노트가 없습니다: $notes"; exit 1; }
+          VERSION=$(jq -r .version package.json)
+          mkdir release-assets
+          windows=$(find release-files -type f -name '*.exe')
+          mac=$(find release-files -type f -name '*.dmg')
+          test -s "$windows"
+          test -s "$mac"
+          cp "$windows" "release-assets/Philosophy.Local.AI_${VERSION}_x64-setup.exe"
+          cp "$mac" "release-assets/Philosophy.Local.AI_${VERSION}_universal.dmg"
+          files=(release-assets/*)
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" "${files[@]}" --clobber
             gh release edit "$TAG" --prerelease --notes-file "$notes"
           else
             gh release create "$TAG" "${files[@]}" --target "$GITHUB_SHA" \
-              --prerelease --title "필로소피 로컬 AI ${TAG} (시험판)" --notes-file "$notes"
+              --draft --prerelease --title "필로소피 로컬 AI ${TAG} (시험판)" --notes-file "$notes"
+            gh release edit "$TAG" --draft=false --prerelease
           fi

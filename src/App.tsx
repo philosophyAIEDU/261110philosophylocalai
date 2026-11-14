@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
-import { AppStatus, LocalOnlyReport, call, errMsg, isTauri, on } from "./lib/api";
+import { AppStatus, InstalledModel, LocalOnlyReport, call, errMsg, isTauri, on } from "./lib/api";
 import { Icon } from "./lib/ui";
 import Onboarding from "./pages/Onboarding";
 import Home from "./pages/Home";
@@ -17,6 +17,7 @@ export type Page = "home" | "chat" | "lecture" | "student" | "research" | "admin
 interface Ctx {
   status: AppStatus;
   local: LocalOnlyReport | null;
+  engineError: string | null;
   refresh: () => Promise<void>;
   go: (p: Page) => void;
 }
@@ -65,6 +66,7 @@ export function LocalBadge({ local, onClick }: { local: LocalOnlyReport | null; 
 export default function App() {
   const [status, setStatus] = useState<AppStatus | null>(null);
   const [local, setLocal] = useState<LocalOnlyReport | null>(null);
+  const [engineError, setEngineError] = useState<string | null>(null);
   const [page, setPage] = useState<Page>("home");
   const [fatal, setFatal] = useState<string | null>(null);
   const { theme, toggle } = useTheme();
@@ -72,9 +74,18 @@ export default function App() {
   const refresh = useCallback(async () => {
     try {
       let s = await call<AppStatus>("app_status");
+      setEngineError(null);
       // 설치된 엔진은 앱을 열 때 자동으로 시작한다.
       if (s.engine.installed && !s.engine.running) {
-        try { await call("start_engine"); s = await call<AppStatus>("app_status"); } catch { /* 화면에서 안내 */ }
+        try { await call("start_engine"); s = await call<AppStatus>("app_status"); }
+        catch (e) { setEngineError(errMsg(e)); }
+      }
+      // 이미 받은 AI가 있는데 선택된 모델이 없으면 자동으로 선택한다 (다시 내려받으라고 묻지 않도록).
+      if (s.engine.running && !s.selected_model && !s.locked) {
+        try {
+          const local = (await call<InstalledModel[]>("list_models")).filter((m) => !m.is_remote);
+          if (local.length > 0) { await call("select_model", { name: local[0].name }); s = await call<AppStatus>("app_status"); }
+        } catch { /* 무시 */ }
       }
       setStatus(s);
       setLocal(s.engine.running ? await call<LocalOnlyReport>("verify_local") : null);
@@ -115,7 +126,7 @@ export default function App() {
 
   if (status.locked) return <LockScreen onUnlocked={() => { setPage("home"); void refresh(); }} />;
 
-  const ctx: Ctx = { status, local, refresh, go: setPage };
+  const ctx: Ctx = { status, local, engineError, refresh, go: setPage };
 
   if (!status.onboarding_done) {
     return (
@@ -194,11 +205,22 @@ export default function App() {
 
 /** 모델이 준비되지 않았을 때 각 기능 화면에 보여 주는 안내 */
 export function NeedModel() {
-  const { status, go } = useApp();
+  const { status, go, refresh } = useApp();
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
   if (status.selected_model && status.engine.running) return null;
+  // 엔진은 설치되어 있는데 멈춰 있을 뿐이면, 다시 내려받을 필요 없이 다시 시작만 하면 된다.
+  if (status.engine.installed && !status.engine.running) {
+    return (
+      <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-warn/25 bg-warn-soft px-4 py-3 text-[14px]">
+        <span>AI 실행 엔진이 멈춰 있습니다. 이미 받은 AI는 그대로 있으니 다시 시작만 하면 됩니다.{err && <span className="block text-danger">{err}</span>}</span>
+        <button className="btn-primary btn-sm shrink-0" disabled={busy} onClick={async () => { setBusy(true); setErr(null); try { await call("start_engine"); await refresh(); } catch (e) { setErr(errMsg(e)); } setBusy(false); }}>{busy ? "시작하는 중…" : "AI 엔진 다시 시작"}</button>
+      </div>
+    );
+  }
   return (
     <div className="mb-5 flex items-center justify-between gap-4 rounded-xl border border-warn/25 bg-warn-soft px-4 py-3 text-[14px]">
-      <span>{!status.engine.running ? "AI 실행 엔진이 준비되지 않았습니다." : "사용할 AI 모델이 아직 없습니다."} 먼저 AI 모델을 준비해 주세요.</span>
+      <span>{!status.engine.installed ? "AI 실행 엔진이 아직 설치되지 않았습니다." : "사용할 AI 모델이 아직 없습니다."} 먼저 AI 모델을 준비해 주세요.</span>
       <button className="btn-primary btn-sm shrink-0" onClick={() => go("models")}>AI 모델 준비하기</button>
     </div>
   );

@@ -5,6 +5,7 @@ import { HardwareSummary, ModelFacts, RecommendationCard, ReasonList } from "../
 import { DownloadFlow } from "../lib/download";
 import { PURPOSES } from "./Onboarding";
 import { useApp } from "../App";
+import { EngineRecovery } from "../lib/engine-recovery";
 
 export default function Models() {
   const { status, refresh } = useApp();
@@ -29,11 +30,7 @@ export default function Models() {
     <div className="space-y-6">
       <PageHeader title="내 AI 모델 관리" sub="이 컴퓨터에 설치된 AI를 확인하고, 새 AI를 내려받거나 지울 수 있습니다." />
       <ErrorNotice error={error} onDismiss={() => setError(null)} />
-      {status.engine.installed && !status.engine.running && (
-        <Notice tone="warn" title="AI 실행 엔진이 멈춰 있습니다">
-          <button className="underline" onClick={async () => { try { await call("start_engine"); await refresh(); loadInstalled(); } catch (e) { setError(errMsg(e)); } }}>엔진 다시 시작하기</button>
-        </Notice>
-      )}
+      <EngineRecovery onRecovered={loadInstalled} />
 
       <section className="card">
         <h2 className="h2 mb-3">설치된 AI</h2>
@@ -49,7 +46,8 @@ export default function Models() {
                     <div className="flex items-center gap-2 font-bold">{m.name}{current && <span className="chip bg-surface text-purple"><Icon name="check" className="h-3.5 w-3.5" />사용 중</span>}{m.is_remote && <span className="chip bg-danger-soft text-danger">원격 모델 — 사용 불가</span>}</div>
                     <div className="text-[12.5px] text-muted tabular-nums">{fmtBytes(m.size_bytes)}{m.parameter_size ? ` · 규모 ${m.parameter_size}` : ""}</div>
                   </div>
-                  {!current && !m.is_remote && <button className="btn-ghost btn-sm" onClick={() => select(m.name)}>이 AI 사용하기</button>}
+                  {!current && !m.is_remote && status.engine.installed && <button className="btn-ghost btn-sm" onClick={() => select(m.name)}>이 AI 사용하기</button>}
+                  {!status.engine.installed && recs?.all.find((a) => a.model.id === m.name) && <button className="btn-primary btn-sm" onClick={() => setTarget(recs!.all.find((a) => a.model.id === m.name)!.model)}>실행 엔진만 설치하기</button>}
                   <button className="btn-danger btn-sm" onClick={() => setToDelete(m)}><Icon name="trash" className="h-4 w-4" /> 삭제</button>
                 </li>
               );
@@ -80,7 +78,7 @@ export default function Models() {
             <button className="p-1 text-muted hover:text-text" aria-label="닫기" onClick={() => setTarget(null)}><Icon name="x" /></button>
           </div>
           {picked && <div className="mb-5"><ReasonList rec={picked} /></div>}
-          {isInstalled(target.id) ? <Notice tone="ok">이미 설치된 AI입니다. 위 목록에서 ‘이 AI 사용하기’를 눌러 바꿀 수 있습니다.</Notice> : <DownloadFlow key={target.id} model={target} doneLabel="완료" onDone={() => { setTarget(null); loadInstalled(); }} />}
+          {isInstalled(target.id) && status.engine.installed ? <Notice tone="ok">이미 설치된 AI입니다. 위 목록에서 ‘이 AI 사용하기’를 눌러 바꿀 수 있습니다.</Notice> : <DownloadFlow key={target.id} model={target} doneLabel="완료" onDone={() => { setTarget(null); loadInstalled(); }} />}
         </section>
       )}
 

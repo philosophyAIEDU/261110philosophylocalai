@@ -1,4 +1,4 @@
-//! 보안 기능 명령: 앱 잠금, 화면 보호, 전체 초기화, 보안 점검, 파일 선택/저장, 가명 처리, 업데이트.
+//! 보안 기능 명령: 앱 잠금, 전체 초기화, 보안 점검, 파일 선택/저장, 가명 처리, 업데이트.
 //!
 //! 파일 경로 원칙: 화면(웹뷰)은 파일 경로를 지정할 수 없다. 파일을 열고 저장할 때는
 //! 여기서 운영체제 대화상자를 직접 띄우고, 교수님이 고른 경로만 사용한다.
@@ -111,15 +111,6 @@ pub(crate) fn set_auto_lock(state: State<'_, AppState>, minutes: u32) -> AppResu
 }
 
 #[tauri::command]
-pub(crate) fn set_screen_protection(app: AppHandle, state: State<'_, AppState>, enabled: bool) -> AppResult<()> {
-    state.store.set_setting("screen_protection", if enabled { "true" } else { "false" })?;
-    if let Some(w) = app.get_webview_window("main") {
-        let _ = w.set_content_protected(enabled);
-    }
-    Ok(())
-}
-
-#[tauri::command]
 pub(crate) fn set_pseudonymize(state: State<'_, AppState>, enabled: bool) -> AppResult<()> {
     state.store.set_setting("pseudonymize_students", if enabled { "true" } else { "false" })
 }
@@ -141,9 +132,6 @@ pub(crate) fn factory_reset(app: AppHandle, state: State<'_, AppState>, confirm:
     if let Some(p) = state.update_file.lock().unwrap().take() {
         let _ = std::fs::remove_file(p);
     }
-    if let Some(w) = app.get_webview_window("main") {
-        let _ = w.set_content_protected(true);
-    }
     state.touch();
     Ok(())
 }
@@ -154,8 +142,6 @@ pub(crate) struct SecurityCheckup {
     key_store: KeyStoreKind,
     has_passcode: bool,
     auto_lock_minutes: u32,
-    screen_protection: bool,
-    screen_protection_supported: bool,
     save_history: bool,
     pseudonymize_students: bool,
     download_consent: bool,
@@ -170,8 +156,6 @@ pub(crate) async fn security_checkup(state: State<'_, AppState>) -> AppResult<Se
         key_store: state.keystore.kind(),
         has_passcode: state.keystore.state()? == KeyState::Passcode,
         auto_lock_minutes: auto_lock_minutes(&state.store),
-        screen_protection: state.store.get_bool("screen_protection", true),
-        screen_protection_supported: cfg!(any(target_os = "windows", target_os = "macos")),
         save_history: state.store.get_bool("save_history", false),
         pseudonymize_students: state.store.get_bool("pseudonymize_students", true),
         download_consent: state.guard.download_consent(),

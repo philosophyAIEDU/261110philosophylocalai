@@ -1,7 +1,7 @@
 // AI 모델 원클릭 내려받기 흐름:
 // 동의 확인 → (필요 시) 실행 엔진 설치 → 엔진 시작 → 모델 내려받기 → 무결성 확인 → 실행 테스트 → 선택
 import { useEffect, useRef, useState } from "react";
-import { CatalogModel, Progress, call, errCode, errMsg, fmtBytes, newJobId, on } from "./api";
+import { CatalogModel, InstalledModel, Progress, call, errCode, errMsg, fmtBytes, newJobId, on } from "./api";
 import { ErrorNotice, Icon, Notice, ProgressBar } from "./ui";
 import { useApp } from "../App";
 
@@ -17,6 +17,27 @@ export function DownloadFlow({ model, onDone, doneLabel = "AI 사용 시작하�
   const [testReply, setTestReply] = useState<{ reply: string; tokens_per_sec: number | null } | null>(null);
   const jobRef = useRef<string | null>(null);
   const lastRef = useRef<{ t: number; b: number } | null>(null);
+  const [alreadyInstalled, setAlreadyInstalled] = useState(false);
+  const [checking, setChecking] = useState(true);
+  const [checkFailed, setCheckFailed] = useState(false);
+  const [checkAttempt, setCheckAttempt] = useState(0);
+
+  // 이 AI가 이미 이 컴퓨터에 있으면 다시 내려받지 않는다.
+  useEffect(() => {
+    let alive = true;
+    setChecking(true); setAlreadyInstalled(false); setCheckFailed(false); setError(null);
+    call<InstalledModel[]>("list_models")
+      .then((list) => { if (alive) setAlreadyInstalled(list.some((m) => m.name === model.id && !m.is_remote)); })
+      .catch((e) => { if (alive) { setError(errMsg(e)); setCheckFailed(true); } })
+      .finally(() => { if (alive) setChecking(false); });
+    return () => { alive = false; };
+  }, [model.id, status.engine.installed, checkAttempt]);
+
+  const useInstalled = async () => {
+    setError(null);
+    try { await call("select_model", { name: model.id }); await refresh(); onDone(); }
+    catch (e) { setError(errMsg(e)); }
+  };
 
   useEffect(() => {
     const handle = (p: { job_id: string; progress: Progress }) => {
@@ -47,7 +68,10 @@ export function DownloadFlow({ model, onDone, doneLabel = "AI 사용 시작하�
       await call("start_engine");
       setPhase("model"); lastRef.current = null;
       jobRef.current = newJobId();
-      await call("pull_model", { jobId: jobRef.current, name: model.id });
+      const existing = await call<InstalledModel[]>("list_models");
+      if (!existing.some((m) => m.name === model.id && !m.is_remote)) {
+        await call("pull_model", { jobId: jobRef.current, name: model.id });
+      }
       setPhase("testing");
       const t = await call<{ reply: string; tokens_per_sec: number | null }>("test_model", { name: model.id });
       setTestReply(t);
@@ -79,12 +103,26 @@ export function DownloadFlow({ model, onDone, doneLabel = "AI 사용 시작하�
 
   return (
     <div className="space-y-4">
-      {phase === "idle" || phase === "error" ? (
+      {checking && (phase === "idle" || phase === "error") ? (
+        <Notice>컴퓨터에 이미 받은 AI가 있는지 확인하는 중입니다…</Notice>
+      ) : checkFailed && (phase === "idle" || phase === "error") ? (
         <>
+          <ErrorNotice error={error} />
+          <button className="btn-ghost" onClick={() => setCheckAttempt((n) => n + 1)}>기존 AI 다시 확인하기</button>
+        </>
+      ) : alreadyInstalled && status.engine.installed && (phase === "idle" || phase === "error") ? (
+        <>
+          <Notice tone="ok" title="이미 이 컴퓨터에 있는 AI입니다">다시 내려받을 필요가 없습니다. 아래 버튼을 누르면 바로 사용할 수 있습니다.</Notice>
+          <ErrorNotice error={error} />
+          <button className="btn-primary w-full py-3 text-[15.5px]" onClick={useInstalled}>이 AI 사용하기</button>
+        </>
+      ) : phase === "idle" || phase === "error" ? (
+        <>
+          {alreadyInstalled && <Notice tone="ok" title="이미 받은 AI 모델을 찾았습니다">모델은 다시 내려받지 않습니다. 실행에 필요한 AI 엔진만 설치합니다.</Notice>}
           <div className="rounded-xl bg-surface-2 px-4 py-3 text-[14px]">
             <div className="mb-1 font-bold">내려받기 안내</div>
             <ul className="list-disc space-y-0.5 pl-5 text-muted">
-              <li>내려받는 용량: 약 <b className="text-text">{model.download_gb.toFixed(1)}GB</b>{!status.engine.installed && " + AI 실행 엔진(Ollama)"}</li>
+              <li>{alreadyInstalled ? "내려받을 항목: AI 실행 엔진(Ollama)만" : <>내려받는 용량: 약 <b className="text-text">{model.download_gb.toFixed(1)}GB</b>{!status.engine.installed && " + AI 실행 엔진(Ollama)"}</>}</li>
               <li>인터넷은 <b className="text-text">AI 실행 엔진과 AI 모델 파일을 내려받을 때만</b> 사용합니다.</li>
               <li>교수님의 문서, 질문, 대화 내용은 <b className="text-text">어디로도 전송되지 않습니다.</b></li>
               <li>라이선스: {model.license} ({model.publisher})</li>
@@ -101,7 +139,7 @@ export function DownloadFlow({ model, onDone, doneLabel = "AI 사용 시작하�
           </label>
           <ErrorNotice error={error} />
           <button className="btn-gold w-full py-3 text-[15.5px]" disabled={!consent || (!status.engine.installed && !status.engine.installable)} onClick={begin}>
-            <Icon name="download" /> {phase === "error" ? "다시 시도하기" : "이 AI 다운로드하기"}
+            <Icon name="download" /> {phase === "error" ? "다시 시도하기" : alreadyInstalled ? "실행 엔진만 설치하기" : "이 AI 다운로드하기"}
           </button>
         </>
       ) : (

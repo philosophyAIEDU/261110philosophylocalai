@@ -63,6 +63,26 @@ async fn engine_requests(port: u16) -> serde_json::Value {
 }
 
 #[tokio::test]
+async fn exited_engine_is_reported_stopped_and_can_restart() {
+    let env = setup(&[]).await;
+    let pid = sysinfo::Pid::from_u32(env.engine.pid().await.unwrap());
+    let mut system = sysinfo::System::new();
+    system.refresh_processes(sysinfo::ProcessesToUpdate::Some(&[pid]), true);
+    assert!(system.process(pid).unwrap().kill());
+    for _ in 0..100 {
+        if !env.engine.status().await.running { break; }
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    assert!(!env.engine.status().await.running);
+    assert_eq!(env.engine.port().await, None);
+    let port = env.engine.start().await.unwrap();
+    assert!(env.engine.status().await.running);
+    let rt = OllamaRuntime::new(port, env.guard.clone(), Catalog::builtin().allowed_ids());
+    assert!(rt.health().await.unwrap().running);
+    env.engine.stop().await;
+}
+
+#[tokio::test]
 async fn engine_lifecycle_loopback_only_and_cleanup() {
     let env = setup(&[]).await;
     let health = env.rt.health().await.unwrap();
@@ -128,6 +148,25 @@ async fn exposed_or_cloud_enabled_engine_is_detected() {
         assert!(!r.loopback_only, "외부 노출을 감지해야 함: {:?}", r.details);
     }
     child.kill().await.unwrap();
+}
+
+#[tokio::test]
+async fn reinstall_reuses_retained_model_without_consent_or_pull_request() {
+    let env = setup(&[]).await;
+    env.guard.set_download_consent(true);
+    pull(&env, MODEL).await.0.unwrap();
+    let count = engine_requests(env.port).await.as_array().unwrap().len();
+    env.engine.stop().await;
+    // 새 앱 인스턴스: 다운로드 동의나 선택 모델 설정이 없어도 저장소는 재사용한다.
+    let guard = Arc::new(NetGuard::new());
+    let engine = EngineManager::new(env._dir.path().to_path_buf(), guard.clone()).with_dev_binary(PathBuf::from(FAKE));
+    let port = engine.start().await.unwrap();
+    let rt = OllamaRuntime::new(port, guard, Catalog::builtin().allowed_ids());
+    assert!(rt.list_models().await.unwrap().iter().any(|m| m.name == MODEL));
+    rt.pull_model(MODEL, Box::new(|p| assert!(p.done)), CancellationToken::new()).await.unwrap();
+    assert!(engine_requests(port).await.as_array().unwrap().is_empty());
+    assert_eq!(count, 1);
+    engine.stop().await;
 }
 
 #[tokio::test]

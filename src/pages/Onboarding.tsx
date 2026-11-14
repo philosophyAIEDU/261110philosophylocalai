@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { HardwareReport, Purpose, Recommendation, RecommendationResult, call, errMsg } from "../lib/api";
+import { HardwareReport, InstalledModel, Purpose, Recommendation, RecommendationResult, call, errMsg } from "../lib/api";
 import { ErrorNotice, Icon, Notice, SecurityTip } from "../lib/ui";
 import { HardwareSummary, RecommendationCard, ReasonList } from "../lib/modelcard";
 import { DownloadFlow } from "../lib/download";
@@ -14,7 +14,8 @@ export const PURPOSES: { id: Purpose; label: string; desc: string }[] = [
 ];
 
 export default function Onboarding() {
-  const { refresh } = useApp();
+  const { refresh, status } = useApp();
+  const [installed, setInstalled] = useState<InstalledModel[]>([]);
   const [step, setStep] = useState(0);
   const [hw, setHw] = useState<HardwareReport | null>(null);
   const [purpose, setPurpose] = useState<Purpose>("general");
@@ -25,6 +26,14 @@ export default function Onboarding() {
   useEffect(() => {
     if (step === 1 && !hw) call<HardwareReport>("detect_hardware").then(setHw).catch((e) => setError(errMsg(e)));
   }, [step, hw]);
+
+  // 이미 받은 AI가 있으면 다시 내려받지 않고 바로 쓸 수 있게 한다 (재설치·초기화 후 등)
+  useEffect(() => {
+    if (step !== 2) return;
+    let alive = true;
+    call<InstalledModel[]>("list_models").then((l) => { if (alive) setInstalled(l.filter((m) => !m.is_remote)); }).catch((e) => { if (alive) setError(errMsg(e)); });
+    return () => { alive = false; };
+  }, [step, status.engine.installed]);
 
   useEffect(() => {
     if (step !== 2) return;
@@ -106,12 +115,19 @@ export default function Onboarding() {
                 </button>
               ))}
             </div>
+            {installed.length > 0 && (
+              <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-ok/25 bg-ok-soft px-4 py-3 text-[14px]">
+                <span><b>이미 이 컴퓨터에 받은 AI가 있습니다:</b> {installed.map((m) => m.name).join(", ")}. 다시 내려받을 필요가 없습니다.</span>
+                {status.engine.installed && installed.map((m) => <button key={m.name} className="btn-primary btn-sm shrink-0" onClick={async () => { try { await call("select_model", { name: m.name }); await refresh(); setStep(4); } catch (e) { setError(errMsg(e)); } }}>{m.name} 사용하기</button>)}
+                {!status.engine.installed && <span>같은 AI를 선택하면 실행 엔진만 설치합니다.</span>}
+              </div>
+            )}
             {recs && recs.recommendations.length === 0 && <Notice tone="warn">{recs.explanation}</Notice>}
             {recs && recs.recommendations.length > 0 && (
               <>
                 <div className={`mb-5 grid gap-4 ${recs.recommendations.length === 3 ? "md:grid-cols-3" : "md:grid-cols-2"}`}>
                   {recs.recommendations.map((r) => (
-                    <RecommendationCard key={r.assessment.model.id} rec={r} selected={picked?.assessment.model.id === r.assessment.model.id} onSelect={() => setPicked(r)} />
+                    <RecommendationCard key={r.assessment.model.id} rec={r} installed={installed.some((m) => m.name === r.assessment.model.id)} selected={picked?.assessment.model.id === r.assessment.model.id} onSelect={() => setPicked(r)} />
                   ))}
                 </div>
                 {picked && <div className="card mb-5"><ReasonList rec={picked} /></div>}
@@ -120,7 +136,13 @@ export default function Onboarding() {
             )}
             <div className="flex items-center gap-2">
               <button className="btn-ghost" onClick={() => setStep(1)}>이전</button>
-              <button className="btn-primary" disabled={!picked} onClick={() => setStep(3)}>이 AI로 계속하기</button>
+              <button className="btn-primary" disabled={!picked} onClick={async () => {
+                if (!picked) return;
+                const name = picked.assessment.model.id;
+                if (status.engine.installed && installed.some((m) => m.name === name)) {
+                  try { await call("select_model", { name }); await refresh(); setStep(4); } catch (e) { setError(errMsg(e)); }
+                } else setStep(3);
+              }}>이 AI로 계속하기</button>
               <button className="ml-auto text-[13.5px] text-muted underline underline-offset-4" onClick={toSecurity}>지금은 건너뛰기</button>
             </div>
           </div>
@@ -129,7 +151,7 @@ export default function Onboarding() {
         {step === 3 && picked && (
           <div className="mx-auto max-w-[640px] pt-4">
             <h1 className="h1 mb-2">{picked.assessment.model.display_name} 준비하기</h1>
-            <p className="sub mb-6">아래 버튼을 누르면 필요한 것을 모두 자동으로 내려받고 설치합니다.</p>
+            <p className="sub mb-6">이미 받은 AI가 있는지 먼저 확인하고, 필요한 파일만 설치합니다.</p>
             <div className="card"><DownloadFlow model={picked.assessment.model} onDone={toSecurity} doneLabel="다음: 안전 설정" /></div>
             <div className="mt-4 flex items-center gap-2">
               <button className="btn-ghost" onClick={() => setStep(2)}>다른 AI 고르기</button>
@@ -152,7 +174,6 @@ export default function Onboarding() {
               <ul className="space-y-1 text-[14px]">
                 <li className="flex gap-2"><Icon name="check" className="mt-1 h-4 w-4 shrink-0 text-ok" />AI가 이 컴퓨터 안에서만 실행되고, 자료가 인터넷으로 나가지 않습니다.</li>
                 <li className="flex gap-2"><Icon name="check" className="mt-1 h-4 w-4 shrink-0 text-ok" />저장되는 기록은 모두 암호화됩니다. 대화 기록 저장은 기본으로 꺼져 있습니다.</li>
-                <li className="flex gap-2"><Icon name="check" className="mt-1 h-4 w-4 shrink-0 text-ok" />화상회의 화면 공유·캡처에 이 앱 창이 나타나지 않습니다. (Windows·Mac)</li>
                 <li className="flex gap-2"><Icon name="check" className="mt-1 h-4 w-4 shrink-0 text-ok" />학생 기록을 AI에 보낼 때 이름을 ‘학생1’처럼 가명으로 바꿉니다.</li>
               </ul>
             </div>

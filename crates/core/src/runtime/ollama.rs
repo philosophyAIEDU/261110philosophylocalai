@@ -239,6 +239,14 @@ impl AiRuntime for OllamaRuntime {
     }
 
     async fn pull_model(&self, name: &str, mut on_progress: ProgressSink, cancel: CancellationToken) -> AppResult<()> {
+        if !self.allowed_models.iter().any(|m| m == name) || is_cloud_model_name(name) {
+            return Err(AppError::Blocked("앱에 등록된 로컬 모델만 내려받을 수 있습니다".into()));
+        }
+        if cancel.is_cancelled() { return Err(AppError::Cancelled); }
+        if self.list_models().await?.iter().any(|m| m.name == name && !m.is_remote) {
+            on_progress(PullProgress { stage: "이미 받은 AI를 재사용합니다".into(), done: true, ..Default::default() });
+            return Ok(());
+        }
         const MAX_ATTEMPTS: u32 = 4;
         let mut attempt = 0;
         loop {
