@@ -259,13 +259,23 @@ async fn start_engine(state: State<'_, AppState>) -> AppResult<u16> {
 
 #[tauri::command]
 async fn list_models(state: State<'_, AppState>) -> AppResult<Vec<InstalledModel>> {
-    if !state.engine.is_installed() {
+    // 엔진이 없거나(재설치 직후) 시작하지 못해도, 앱 모델 폴더에 남아 있는 AI를 직접 확인한다.
+    // 그래야 이미 받은 AI를 다시 내려받으라고 묻지 않는다.
+    let on_disk = || {
         let dir = state.engine.models_dir();
         let catalog = state.catalog.clone();
-        return tauri::async_runtime::spawn_blocking(move || pla_core::runtime::local_models::discover(&dir, &catalog))
-            .await.map_err(|_| E::Other("기존 AI 파일을 확인하지 못했습니다".into()));
+        tauri::async_runtime::spawn_blocking(move || pla_core::runtime::local_models::discover(&dir, &catalog))
+    };
+    if !state.engine.is_installed() {
+        return on_disk().await.map_err(|_| E::Other("기존 AI 파일을 확인하지 못했습니다".into()));
     }
-    state.runtime().await?.list_models().await
+    match state.runtime().await {
+        Ok(rt) => rt.list_models().await,
+        Err(e) => {
+            let found = on_disk().await.unwrap_or_default();
+            if found.is_empty() { Err(e) } else { Ok(found) }
+        }
+    }
 }
 
 #[tauri::command]

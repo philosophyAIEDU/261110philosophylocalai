@@ -3168,7 +3168,7 @@ dependencies = [
 
 [[package]]
 name = "philosophy-local-ai"
-version = "0.2.3"
+version = "0.2.4"
 dependencies = [
  "pla-core",
  "serde",
@@ -3207,7 +3207,7 @@ checksum = "f6b464fbc74e149a392436b17d523f769e057cb6877f6a5c4618bc6f11800548"
 
 [[package]]
 name = "pla-core"
-version = "0.2.3"
+version = "0.2.4"
 dependencies = [
  "argon2",
  "async-trait",
