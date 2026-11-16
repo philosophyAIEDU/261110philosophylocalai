@@ -24,6 +24,7 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
+mod records;
 mod secure;
 use tauri::{AppHandle, Emitter, Manager, State};
 use tokio_util::sync::CancellationToken;
@@ -48,6 +49,11 @@ pub(crate) struct AppState {
     /// 업데이트 확인으로 찾은 설치 파일과, 내려받아 검증한 파일 경로
     pub(crate) update_asset: Mutex<Option<pla_core::update::InstallerAsset>>,
     pub(crate) update_file: Mutex<Option<PathBuf>>,
+}
+
+/// 대화·분석 기록 저장 여부. 기본으로 켜져 있다 (기록은 암호화되어 이 앱에만 저장).
+pub(crate) fn save_history_on(store: &Store) -> bool {
+    store.get_bool("save_history", true)
 }
 
 pub(crate) fn now_secs() -> u64 {
@@ -174,7 +180,7 @@ async fn app_status(state: State<'_, AppState>) -> AppResult<AppStatus> {
         selected_model: state.store.get_setting("selected_model")?.filter(|s| !s.is_empty()),
         onboarding_done: state.store.get_bool("onboarding_done", false),
         download_consent: state.guard.download_consent(),
-        save_history: state.store.get_bool("save_history", false),
+        save_history: save_history_on(&state.store),
         purpose: stored_purpose(&state.store),
         locked: state.store.is_locked(),
         has_passcode: state.keystore.state()? == KeyState::Passcode,
@@ -414,7 +420,7 @@ async fn chat_send(app: AppHandle, state: State<'_, AppState>, job_id: String, c
 
     // 대화 기록 저장은 사용자가 켠 경우에만
     let mut conv = conversation_id;
-    if state.store.get_bool("save_history", false) && !last_user.is_empty() {
+    if save_history_on(&state.store) && !last_user.is_empty() {
         let id = match &conv {
             Some(id) => id.clone(),
             None => state.store.create_conversation("chat", &title_from(&last_user))?,
@@ -680,7 +686,7 @@ async fn privacy_info(state: State<'_, AppState>) -> AppResult<PrivacyInfo> {
         database_path: state.store.path().to_string_lossy().into_owned(),
         models_dir: models_dir.to_string_lossy().into_owned(),
         key_store: state.keystore.kind(),
-        save_history: state.store.get_bool("save_history", false),
+        save_history: save_history_on(&state.store),
         download_consent: state.guard.download_consent(),
         stats: state.store.stats()?,
         audit_log: state.guard.audit_log(),
@@ -832,6 +838,9 @@ pub fn run() {
             delete_all_conversations,
             delete_all_data,
             clear_loaded_files,
+            records::save_record,
+            records::append_record,
+            records::list_records,
             secure::unlock_app,
             secure::lock_app,
             secure::user_activity,

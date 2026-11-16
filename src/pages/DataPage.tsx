@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
+import { useSessionState } from "../lib/session";
+import { RecordsPanel, notifyRecordsChanged, saveRecord } from "../lib/records";
 import { Agg, ChatOutcome, GroupResult, GroupSpec, TableInfo, call, errMsg, fmtNum } from "../lib/api";
 import { Empty, ErrorNotice, ExportButtons, Icon, Md, Notice, PageHeader, SecurityTip, useAiJob } from "../lib/ui";
 import { NeedModel, useApp } from "../App";
@@ -29,20 +31,22 @@ function BarChart({ result }: { result: GroupResult }) {
 
 export default function DataPage() {
   const { status } = useApp();
-  const [table, setTable] = useState<TableInfo | null>(null);
+  const [table, setTable] = useSessionState<TableInfo | null>("data.table", null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [groupCol, setGroupCol] = useState("");
-  const [valueCol, setValueCol] = useState("");
-  const [agg, setAgg] = useState<Agg>("count");
-  const [group, setGroup] = useState<GroupResult | null>(null);
-  const [focus, setFocus] = useState("");
-  const [stats, setStats] = useState("");
+  const [groupCol, setGroupCol] = useSessionState("data.groupCol", "");
+  const [valueCol, setValueCol] = useSessionState("data.valueCol", "");
+  const [agg, setAgg] = useSessionState<Agg>("data.agg", "count");
+  const [group, setGroup] = useSessionState<GroupResult | null>("data.group", null);
+  const [focus, setFocus] = useSessionState("data.focus", "");
+  const [stats, setStats] = useSessionState("data.stats", "");
+  const [reportText, setReportText] = useSessionState("data.report", "");
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
   const job = useAiJob();
   const ready = !!status.selected_model && status.engine.running;
 
-  useEffect(() => () => { void call("clear_loaded_files"); }, []);
+  // 다른 메뉴에 다녀오면 마지막 보고서를 다시 보여 준다.
+  useEffect(() => { if (reportText && !job.text && !job.running) job.setText(reportText); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const load = async (sheet: string | null) => {
     setLoading(true); setError(null);
@@ -50,7 +54,7 @@ export default function DataPage() {
       // 파일 선택 창은 앱이 직접 띄운다 (화면은 파일 경로를 다루지 않음)
       const t = sheet === null ? await call<TableInfo | null>("pick_table") : await call<TableInfo>("reload_table_sheet", { sheet });
       if (!t) { setLoading(false); return; }
-      setGroup(null); job.reset(); setStats("");
+      setGroup(null); job.reset(); setStats(""); setReportText("");
       setTable(t);
       const firstText = t.profile.columns.find((c) => c.kind === "text" && c.unique > 1 && c.unique <= Math.max(30, t.profile.row_count / 2));
       setGroupCol(firstText?.name ?? t.headers[0] ?? ""); setValueCol(""); setAgg("count");
@@ -69,8 +73,18 @@ export default function DataPage() {
   };
   const report = async () => {
     if (!table) return;
+    setReportText("");
     const res = await job.run((jobId) => call<{ stats_markdown: string; outcome: ChatOutcome }>("data_report", { jobId, tableId: table.id, spec: group && specValid ? spec : null, focus }));
-    if (res) setStats(res.stats_markdown);
+    if (res) {
+      setStats(res.stats_markdown);
+      if (res.outcome.content && !res.outcome.cancelled) {
+        setReportText(res.outcome.content);
+        // 계산된 통계표와 AI 해석을 함께 '지난 기록'에 암호화 저장
+        const full = `# 데이터 분석 보고서\n\n## 계산된 통계 (프로그램이 계산한 값)\n\n${res.stats_markdown}\n\n## AI 해석\n\n${res.outcome.content}`;
+        await saveRecord("data", `데이터 분석 보고서 · ${table.file_name}`, focus.trim() ? `궁금한 점: ${focus.trim()}` : "", full);
+        notifyRecordsChanged();
+      }
+    }
   };
   const saveXlsx = async () => {
     if (!table) return;
@@ -89,7 +103,7 @@ export default function DataPage() {
       <PageHeader title="Excel 데이터 분석" sub="Excel·CSV 파일의 통계를 프로그램이 정확히 계산하고, AI가 그 결과를 해석해 보고서로 정리합니다."
         right={<button className="btn-primary shrink-0" onClick={pick} disabled={loading || job.running}><Icon name="plus" className="h-4 w-4" /> {loading ? "읽는 중…" : "파일 불러오기"}</button>} />
       <ErrorNotice error={error} onDismiss={() => setError(null)} />
-      <SecurityTip title="보안 유의사항">성적처럼 학생 개인정보가 담긴 표는 이름·학번 열을 지운 사본으로 분석하시길 권합니다. AI에게는 개별 학생의 행이 아니라 계산된 통계표만 전달되며, 불러온 표는 메뉴를 떠나거나 앱이 잠기면 메모리에서 지워집니다.</SecurityTip>
+      <SecurityTip title="보안 유의사항">성적처럼 학생 개인정보가 담긴 표는 이름·학번 열을 지운 사본으로 분석하시길 권합니다. AI에게는 개별 학생의 행이 아니라 계산된 통계표만 전달되며, 불러온 표는 앱이 잠기면 메모리에서 지워지고, 분석 보고서는 암호화되어 ‘지난 기록’에 남습니다.</SecurityTip>
 
       {!table ? (
         <Empty icon="table" title="분석할 파일을 불러와 주세요">Excel(.xlsx, .xls)과 CSV 파일을 지원합니다. 첫 줄을 항목 이름으로 읽습니다. 파일은 이 컴퓨터 안에서만 처리됩니다.</Empty>
@@ -187,6 +201,7 @@ export default function DataPage() {
           </section>
         </>
       )}
+      <RecordsPanel kind="data" title="지난 분석 보고서" />
     </div>
   );
 }

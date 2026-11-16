@@ -11,6 +11,7 @@ import Models from "./pages/Models";
 import Privacy from "./pages/Privacy";
 import LockScreen from "./pages/Lock";
 import UpdatePage from "./pages/Update";
+import { clearSession } from "./lib/session";
 
 export type Page = "home" | "chat" | "lecture" | "student" | "research" | "admin" | "data" | "models" | "privacy" | "update";
 
@@ -98,7 +99,8 @@ export default function App() {
 
   // 자동 잠금: 앱이 잠겼다는 알림을 받으면 잠금 화면으로 전환
   useEffect(() => {
-    const sub = on("app-locked", () => { setStatus((s) => (s ? { ...s, locked: true } : s)); });
+    // 잠기면 화면에 남아 있던 작업 내용(대화·결과·불러온 문서 목록)도 메모리에서 지운다.
+    const sub = on("app-locked", () => { clearSession(); setStatus((s) => (s ? { ...s, locked: true } : s)); });
     return () => { sub.then((un) => un()); };
   }, []);
 
@@ -124,6 +126,7 @@ export default function App() {
   }
   if (!status) return <div className="flex h-full items-center justify-center text-muted">불러오는 중…</div>;
 
+  if (status.locked) { clearSession(); }
   if (status.locked) return <LockScreen onUnlocked={() => { setPage("home"); void refresh(); }} />;
 
   const ctx: Ctx = { status, local, engineError, refresh, go: setPage };

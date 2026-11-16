@@ -1,11 +1,13 @@
 // 강의자료 분석 / 연구자료 분석 / 행정업무 도우미 — 같은 화면 구성을 쓴다.
 import { useEffect, useState } from "react";
+import { useSessionState } from "../lib/session";
+import { RecordsPanel, appendRecord, notifyRecordsChanged, saveRecord } from "../lib/records";
 import { ChatMessage, ChatOutcome, Chunk, DocInfo, TaskDef, call, errMsg } from "../lib/api";
 import { Empty, ErrorNotice, Icon, Md, Notice, PageHeader, ResultCard, SecurityTip, useAiJob } from "../lib/ui";
 import { NeedModel, useApp } from "../App";
 
 const META: Record<string, { title: string; sub: string; pasteLabel: string; pastePlaceholder: string; qa: boolean; note?: string; tip: string }> = {
-  lecture: { title: "강의자료 분석", sub: "강의자료를 불러와 요약, 핵심 개념, 수업 목표, 토론 질문, 퀴즈 초안을 만듭니다.", pasteLabel: "또는 내용을 직접 붙여 넣기", pastePlaceholder: "강의 노트나 자료 내용을 붙여 넣으세요", qa: true, tip: "불러온 파일은 이 컴퓨터의 메모리에서만 읽고 복사본을 만들지 않으며, 다른 메뉴로 이동하거나 앱이 잠기면 지워집니다. 학생 이름이 들어간 자료는 꼭 필요한 부분만 불러와 주세요." },
+  lecture: { title: "강의자료 분석", sub: "강의자료를 불러와 요약, 핵심 개념, 수업 목표, 토론 질문, 퀴즈 초안을 만듭니다.", pasteLabel: "또는 내용을 직접 붙여 넣기", pastePlaceholder: "강의 노트나 자료 내용을 붙여 넣으세요", qa: true, tip: "불러온 파일은 이 컴퓨터의 메모리에서만 읽고 복사본을 만들지 않으며, 앱이 잠기면 메모리에서 지워집니다. 분석 결과는 암호화되어 ‘지난 기록’에 남습니다. 학생 이름이 들어간 자료는 꼭 필요한 부분만 불러와 주세요." },
   research: { title: "연구자료 분석", sub: "논문과 연구자료를 요약·비교하고, 주제별로 정리합니다.", pasteLabel: "또는 내용을 직접 붙여 넣기", pastePlaceholder: "초록이나 메모를 붙여 넣으세요", qa: true, note: "AI는 자료에 없는 참고문헌이나 연구 결과를 만들어 내지 않도록 설정되어 있지만, 인용 전에는 반드시 원문을 확인해 주세요.", tip: "미발표 연구자료도 이 컴퓨터 밖으로 나가지 않습니다. 다만 결과를 Word로 저장하거나 복사하면 그 파일은 암호화되지 않으니, 공유 폴더·메신저로 옮길 때 주의해 주세요." },
   admin: { title: "행정업무 도우미", sub: "회의 메모나 자료를 바탕으로 회의록, 보고서, 공문 초안을 작성합니다.", pasteLabel: "메모·내용 입력", pastePlaceholder: "회의 메모, 행사 내용, 전달할 사항 등을 적어 주세요", qa: false, tip: "공문·보고서 초안에 들어간 개인정보(연락처, 학번 등)는 실제 문서로 보내기 전에 꼭 필요한지 다시 확인해 주세요. 저장한 파일은 암호화되지 않습니다." },
 };
@@ -14,37 +16,49 @@ export default function TaskPage({ category }: { category: "lecture" | "research
   const meta = META[category];
   const { status } = useApp();
   const [tasks, setTasks] = useState<TaskDef[]>([]);
-  const [docs, setDocs] = useState<DocInfo[]>([]);
-  const [pasted, setPasted] = useState("");
-  const [extra, setExtra] = useState("");
-  const [active, setActive] = useState<TaskDef | null>(null);
+  // 메뉴를 옮겨도 작업 중이던 내용이 남도록 (앱이 잠기면 지워짐)
+  const [docs, setDocs] = useSessionState<DocInfo[]>(`${category}.docs`, []);
+  const [pasted, setPasted] = useSessionState(`${category}.pasted`, "");
+  const [extra, setExtra] = useSessionState(`${category}.extra`, "");
+  const [active, setActive] = useSessionState<TaskDef | null>(`${category}.active`, null);
+  const [lastResult, setLastResult] = useSessionState(`${category}.result`, "");
+  const [qaRecordId, setQaRecordId] = useSessionState<string | null>(`${category}.qaRecord`, null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const job = useAiJob();
   const qaJob = useAiJob();
   const [question, setQuestion] = useState("");
-  const [qaLog, setQaLog] = useState<{ q: string; a: string; evidence: Chunk[] }[]>([]);
+  const [qaLog, setQaLog] = useSessionState<{ q: string; a: string; evidence: Chunk[] }[]>(`${category}.qa`, []);
   const ready = !!status.selected_model && status.engine.running;
   const hasMaterial = docs.length > 0 || pasted.trim().length > 0;
   const busy = job.running || qaJob.running;
 
   useEffect(() => { call<TaskDef[]>("list_tasks").then((t) => setTasks(t.filter((x) => x.category === category))).catch(() => {}); }, [category]);
-  // 화면을 떠나면 불러온 문서를 메모리에서 지운다.
-  useEffect(() => () => { void call("clear_loaded_files"); }, []);
+  // 다른 메뉴에 다녀오면 마지막 결과를 다시 보여 준다.
+  useEffect(() => { if (lastResult && !job.text && !job.running) job.setText(lastResult); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const materialNames = () => [...docs.map((d) => d.file_name), ...(pasted.trim() ? ["직접 입력한 내용"] : [])].join(", ");
 
   const addFile = async () => {
     setError(null);
     setLoading(true);
-    try { const d = await call<DocInfo | null>("pick_document"); if (d) setDocs((x) => [...x, d]); }
+    try { const d = await call<DocInfo | null>("pick_document"); if (d) { setDocs((x) => [...x, d]); setQaRecordId(null); } }
     catch (e) { setError(errMsg(e)); }
     setLoading(false);
   };
-  const removeDoc = (id: string) => { void call("remove_document", { id }); setDocs((x) => x.filter((d) => d.id !== id)); };
+  const removeDoc = (id: string) => { void call("remove_document", { id }); setDocs((x) => x.filter((d) => d.id !== id)); setQaRecordId(null); };
 
   const runTask = async (t: TaskDef) => {
     if (busy) return;
-    setActive(t);
-    await job.run((jobId) => call<ChatOutcome>("run_task", { jobId, taskId: t.id, docIds: docs.map((d) => d.id), pasted, extra }));
+    setActive(t); setLastResult("");
+    const out = await job.run((jobId) => call<ChatOutcome>("run_task", { jobId, taskId: t.id, docIds: docs.map((d) => d.id), pasted, extra }));
+    if (out?.content && !out.cancelled) {
+      setLastResult(out.content);
+      const names = materialNames();
+      // 결과를 암호화해 '지난 기록'에 저장
+      await saveRecord(category, `${t.label} · ${names || "자료"}`, `${t.label}\n자료: ${names}${extra.trim() ? `\n덧붙인 내용: ${extra.trim()}` : ""}`, out.content);
+      notifyRecordsChanged();
+    }
   };
 
   const ask = async () => {
@@ -53,7 +67,13 @@ export default function TaskPage({ category }: { category: "lecture" | "research
     setQuestion("");
     const history: ChatMessage[] = qaLog.slice(-2).flatMap((x) => [{ role: "user" as const, content: x.q }, { role: "assistant" as const, content: x.a }]);
     const res = await qaJob.run((jobId) => call<{ outcome: ChatOutcome; evidence: Chunk[] }>("doc_qa", { jobId, docIds: docs.map((d) => d.id), question: q, history }));
-    if (res?.outcome.content) setQaLog((l) => [...l, { q, a: res.outcome.content, evidence: res.evidence }]);
+    if (res?.outcome.content) {
+      setQaLog((l) => [...l, { q, a: res.outcome.content, evidence: res.evidence }]);
+      // 질문·답을 '지난 기록'에 이어서 저장 (같은 자료에 대한 질문은 한 기록으로)
+      if (qaRecordId) await appendRecord(qaRecordId, q, res.outcome.content);
+      else setQaRecordId(await saveRecord(category, `자료에 질문 · ${materialNames() || "자료"}`, q, res.outcome.content));
+      notifyRecordsChanged();
+    }
     qaJob.setText("");
   };
 
@@ -143,6 +163,7 @@ export default function TaskPage({ category }: { category: "lecture" | "research
           </form>
         </section>
       )}
+      <RecordsPanel kind={category} />
     </div>
   );
 }

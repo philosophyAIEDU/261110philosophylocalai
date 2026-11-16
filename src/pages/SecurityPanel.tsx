@@ -122,7 +122,7 @@ export default function SecurityPanel() {
               action={!check.has_passcode ? <button className="btn-primary btn-sm shrink-0" onClick={() => setShowPass(true)}>설정하기</button> : undefined} />
             <CheckRow ok={check.has_passcode && check.auto_lock_minutes > 0} title="자동 잠금" desc={check.has_passcode ? (check.auto_lock_minutes > 0 ? `${check.auto_lock_minutes}분 동안 사용하지 않으면 잠급니다.` : "꺼져 있습니다.") : "앱 잠금 암호를 설정하면 쓸 수 있습니다."} />
             <CheckRow ok={disk?.ok ?? null} title="컴퓨터 디스크 암호화 (BitLocker / FileVault)" desc={`${disk?.text ?? "-"} — 저장한 Word·Excel 파일과 다른 문서를 노트북 분실·도난에서 보호합니다.`} />
-            <CheckRow ok={!check.save_history || check.has_passcode} title="대화 기록 저장" desc={check.save_history ? (check.has_passcode ? "켜짐 (앱 잠금으로 보호됨)" : "켜짐 — 앱 잠금 없이 대화가 저장되고 있습니다.") : "꺼짐 — 창을 닫으면 대화가 사라집니다."} />
+            <CheckRow ok={!check.save_history || check.has_passcode} title="대화·분석 기록 저장" desc={check.save_history ? (check.has_passcode ? "켜짐 — 암호화되어 저장되고 앱 잠금으로 보호됩니다." : "켜짐 — 앱 잠금 없이 기록이 저장되고 있습니다. 잠금 암호를 설정해 주세요.") : "꺼짐 — 새 기록을 저장하지 않습니다."} />
             <CheckRow ok={check.pseudonymize_students} title="학생 기록 가명 처리" desc={check.pseudonymize_students ? "켜짐 — AI에 보낼 때 이름을 ‘학생1’처럼 바꾸고 번호들을 가립니다." : "꺼짐"} />
             <CheckRow ok={check.key_store === "os_keychain"} title="암호화 키 보관" desc={check.key_store === "os_keychain" ? "운영체제 보안 저장소(키체인 / 자격 증명 관리자)에 보관 중" : "파일에 보관 중 (개발용 환경)"} />
           </ul>

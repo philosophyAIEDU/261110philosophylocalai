@@ -4,9 +4,9 @@
 //! AI는 이 컴퓨터 안에서만 실행되지만, AI가 만든 결과는 Word 파일 등으로 저장·공유될 수 있다.
 //! 가명 처리를 하면 결과물에 실명과 식별번호가 남지 않는다.
 use super::redact::mask_pii;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Serialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Alias {
     pub alias: String,
     pub original: String,
