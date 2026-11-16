@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
+import { useSessionState } from "../lib/session";
+import { RecordsPanel, notifyRecordsChanged, saveRecord } from "../lib/records";
 import { Alias, ChatOutcome, StudentNote, TaskDef, call, errMsg } from "../lib/api";
 import { Confirm, Empty, ErrorNotice, Icon, Notice, PageHeader, ResultCard, SecurityTip, useAiJob } from "../lib/ui";
 import { NeedModel, useApp } from "../App";
@@ -7,16 +9,17 @@ const today = () => new Date().toLocaleDateString("sv-SE");
 
 export default function Students() {
   const { status, refresh } = useApp();
-  const [aliases, setAliases] = useState<Alias[]>([]);
+  const [aliases, setAliases] = useSessionState<Alias[]>("student.aliases", []);
+  const [lastResult, setLastResult] = useSessionState("student.result", "");
   const pseudo = status.pseudonymize_students;
   const [notes, setNotes] = useState<StudentNote[]>([]);
   const [query, setQuery] = useState("");
-  const [student, setStudent] = useState("");
+  const [student, setStudent] = useSessionState("student.name", "");
   const [date, setDate] = useState(today());
-  const [content, setContent] = useState("");
-  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [content, setContent] = useSessionState("student.content", "");
+  const [selected, setSelected] = useSessionState<Set<string>>("student.selected", new Set());
   const [tasks, setTasks] = useState<TaskDef[]>([]);
-  const [active, setActive] = useState<TaskDef | null>(null);
+  const [active, setActive] = useSessionState<TaskDef | null>("student.active", null);
   const [toDelete, setToDelete] = useState<StudentNote | null>(null);
   const [error, setError] = useState<string | null>(null);
   const job = useAiJob();
@@ -37,11 +40,23 @@ export default function Students() {
   const run = async (t: TaskDef) => {
     const picked = notes.filter((n) => selected.has(n.id));
     if (!picked.length || job.running) return;
-    setActive(t); setAliases([]);
+    setActive(t); setAliases([]); setLastResult("");
     // 기록 내용은 화면이 아니라 앱(Rust)이 저장소에서 직접 읽어 가명 처리한 뒤 AI에 전달한다.
     const res = await job.run((jobId) => call<{ outcome: ChatOutcome; aliases: Alias[] }>("run_student_task", { jobId, taskId: t.id, noteIds: picked.map((n) => n.id), pseudonymize: pseudo }));
-    if (res) setAliases(res.aliases);
+    if (res) {
+      setAliases(res.aliases);
+      if (res.outcome.content && !res.outcome.cancelled) {
+        setLastResult(res.outcome.content);
+        // 결과(가명 처리된 내용)는 암호화해 '지난 기록'에 저장. 가명 대응표는 따로 저장해 내보낼 때 섞이지 않게 함.
+        const who = res.aliases.length ? res.aliases.map((a) => a.alias).join(", ") : [...new Set(picked.map((n) => n.student))].join(", ");
+        await saveRecord("student", `${t.label} · ${who}`, `${t.label}\n선택한 상담 기록 ${picked.length}개${res.aliases.length ? " (가명 처리)" : ""}`, res.outcome.content, res.aliases);
+        notifyRecordsChanged();
+      }
+    }
   };
+
+  // 다른 메뉴에 다녀오면 마지막 결과를 다시 보여 준다.
+  useEffect(() => { if (lastResult && !job.text && !job.running) job.setText(lastResult); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="space-y-6">
@@ -116,6 +131,7 @@ export default function Students() {
       <Confirm open={!!toDelete} danger title="상담 기록을 삭제할까요?" confirmLabel="삭제" body="이 기록이 이 컴퓨터에서 완전히 삭제됩니다. 되돌릴 수 없습니다."
         onCancel={() => setToDelete(null)}
         onConfirm={async () => { if (toDelete) { try { await call("delete_student_note", { id: toDelete.id }); setSelected((s) => { const n = new Set(s); n.delete(toDelete.id); return n; }); load(); } catch (e) { setError(errMsg(e)); } } setToDelete(null); }} />
+      <RecordsPanel kind="student" title="지난 학생 지도 결과" />
     </div>
   );
 }

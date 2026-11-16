@@ -81,7 +81,7 @@ export default function Home() {
         <button className="text-left" onClick={() => go("models")}>
           <div className="label">현재 AI 모델</div>
           <div className="font-bold">{status.selected_model ?? "아직 없음"}</div>
-          <div className="text-[12.5px] text-muted">눌러서 바꾸기</div>
+          <div className="text-[12.5px] text-muted">AI 실행 엔진: {status.engine_name} · 눌러서 바꾸기</div>
         </button>
         <div>
           <div className="label">실행 상태</div>
@@ -94,6 +94,9 @@ export default function Home() {
           <div className="text-[12.5px] text-muted tabular-nums">AI 모델이 사용 중: {info ? fmtBytes(info.models_bytes) : "-"}</div>
         </div>
       </section>
+      <p className="mt-4 text-center text-[12.5px] text-muted">
+        이 앱은 공개 AI 실행 엔진 <b>Ollama</b>와 공개 AI 모델(Qwen 3·Gemma 3)을 교수님 컴퓨터 안에서 실행합니다. <button className="underline underline-offset-2" onClick={() => go("about")}>사용하는 기술 자세히 보기</button>
+      </p>
     </div>
   );
 }

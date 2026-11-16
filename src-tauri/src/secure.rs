@@ -156,7 +156,7 @@ pub(crate) async fn security_checkup(state: State<'_, AppState>) -> AppResult<Se
         key_store: state.keystore.kind(),
         has_passcode: state.keystore.state()? == KeyState::Passcode,
         auto_lock_minutes: auto_lock_minutes(&state.store),
-        save_history: state.store.get_bool("save_history", false),
+        save_history: crate::save_history_on(&state.store),
         pseudonymize_students: state.store.get_bool("pseudonymize_students", true),
         download_consent: state.guard.download_consent(),
         update_consent: state.guard.update_consent(),

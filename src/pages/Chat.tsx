@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useSessionState } from "../lib/session";
 import { ChatMessage, ChatOutcome, ConversationMeta, InstalledModel, call, errMsg } from "../lib/api";
 import { Confirm, CopyButton, ErrorNotice, Icon, Md, SecurityTip, useAiJob } from "../lib/ui";
 import { LocalBadge, NeedModel, useApp } from "../App";
@@ -7,11 +8,12 @@ const STARTERS = ["다음 주 수업 도입부에 쓸 질문 세 가지를 제�
 
 export default function Chat() {
   const { status, local, refresh, go } = useApp();
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [convId, setConvId] = useState<string | null>(null);
+  // 다른 메뉴에 다녀와도 지금 대화가 그대로 남는다 (앱이 잠기면 화면에서 지워지고, 저장된 대화는 왼쪽 목록에 남음)
+  const [messages, setMessages] = useSessionState<ChatMessage[]>("chat.messages", []);
+  const [convId, setConvId] = useSessionState<string | null>("chat.convId", null);
   const [convs, setConvs] = useState<ConversationMeta[]>([]);
   const [models, setModels] = useState<InstalledModel[]>([]);
-  const [input, setInput] = useState("");
+  const [input, setInput] = useSessionState("chat.input", "");
   const [toDelete, setToDelete] = useState<ConversationMeta | null>(null);
   const [error, setError] = useState<string | null>(null);
   const job = useAiJob();
@@ -54,7 +56,7 @@ export default function Chat() {
         <button className="btn-primary mb-3 w-full" onClick={newChat}><Icon name="plus" className="h-4 w-4" /> 새 대화</button>
         <div className="label px-1">저장된 대화</div>
         <div className="flex-1 space-y-0.5 overflow-y-auto">
-          {!status.save_history && <p className="px-1 text-[12.5px] text-muted">대화 기록 저장이 꺼져 있습니다. 대화는 창을 닫으면 사라집니다. <button className="underline" onClick={() => go("privacy")}>설정 바꾸기</button></p>}
+          {!status.save_history && <p className="px-1 text-[12.5px] text-muted">기록 저장이 꺼져 있습니다. 대화는 앱을 닫으면 사라집니다. <button className="underline" onClick={() => go("privacy")}>설정 바꾸기</button></p>}
           {status.save_history && convs.length === 0 && <p className="px-1 text-[12.5px] text-muted">아직 저장된 대화가 없습니다.</p>}
           {convs.map((c) => (
             <div key={c.id} className={`group flex items-center rounded-lg ${convId === c.id ? "bg-purple-soft" : "hover:bg-surface-2"}`}>

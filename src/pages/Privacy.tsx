@@ -68,7 +68,7 @@ export default function Privacy() {
       <section className="card">
         <h2 className="h2 mb-1">설정</h2>
         <div className="divide-y divide-border">
-          <Toggle checked={!!info?.save_history} onChange={(v) => act(() => call("set_save_history", { enabled: v }))} label="대화 기록 저장" desc="켜면 대화가 암호화되어 이 컴퓨터에 저장됩니다. 끄면 창을 닫을 때 대화가 사라집니다. (기본: 꺼짐)" />
+          <Toggle checked={!!info?.save_history} onChange={(v) => act(() => call("set_save_history", { enabled: v }))} label="대화·분석 기록 저장" desc="AI 대화와 강의자료·연구자료·행정·학생 지도·Excel 분석 결과를 암호화해 이 앱에만 저장합니다. 앱 잠금 암호를 설정해 두면 암호 없이는 열 수 없습니다. 끄면 새 기록을 저장하지 않습니다. (기본: 켜짐)" />
           <Toggle checked={!!info?.download_consent} onChange={(v) => act(() => call("set_download_consent", { consent: v }))} label="AI 내려받기를 위한 인터넷 사용 허용" desc="AI 실행 엔진과 AI 모델 파일을 내려받을 때만 인터넷을 사용합니다. 끄면 앱은 인터넷을 전혀 사용하지 않습니다." />
         </div>
       </section>
