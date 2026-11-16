@@ -11,9 +11,10 @@ import Models from "./pages/Models";
 import Privacy from "./pages/Privacy";
 import LockScreen from "./pages/Lock";
 import UpdatePage from "./pages/Update";
+import About from "./pages/About";
 import { clearSession } from "./lib/session";
 
-export type Page = "home" | "chat" | "lecture" | "student" | "research" | "admin" | "data" | "models" | "privacy" | "update";
+export type Page = "home" | "chat" | "lecture" | "student" | "research" | "admin" | "data" | "models" | "privacy" | "update" | "about";
 
 interface Ctx {
   status: AppStatus;
@@ -36,6 +37,7 @@ const MENU: { id: Page; label: string; icon: string }[] = [
   { id: "models", label: "내 AI 모델 관리", icon: "cpu" },
   { id: "privacy", label: "개인정보 보호 설정", icon: "shield" },
   { id: "update", label: "앱 업데이트", icon: "download" },
+  { id: "about", label: "이 앱에 대하여", icon: "info" },
 ];
 
 function useTheme() {
@@ -198,6 +200,7 @@ export default function App() {
               {page === "models" && <Models />}
               {page === "privacy" && <Privacy />}
               {page === "update" && <UpdatePage />}
+              {page === "about" && <About />}
             </div>
           )}
         </main>
