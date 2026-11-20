@@ -1,5 +1,13 @@
 # TEST_RESULTS — 테스트 결과
 
+## v0.2.6 (2026-11-20, Linux 개발 컨테이너)
+- `cargo test -p pla-core --features fake-engine`: 전부 통과 (단위 89 · 통합 14 포함)
+  - 새 테스트: 직접 추가 모델 이름 검사(허용 7종, 거부 18종: 클라우드·다른 저장소·경로 탈출 등),
+    추가한 모델의 저장소 탐지, 가짜 엔진으로 추가 모델 내려받기·대화·감사 로그, 추가하지 않은 모델 차단
+- 내장 모델 목록 검사(34개: 중복·추천 목록과 겹침 없음, 모든 이름이 직접 추가 검사 통과)
+- 브라우저 미리보기: 목록 펼치기·태그 거르기·너무 큰 AI 숨기기·‘추가하고 내려받기’, 클라우드 모델 거부 → `ollama run exaone3.5:7.8b` 추가 → 내려받기 → 사용 중 표시, 콘솔 오류 없음
+- 미검증: 실제 ollama.com 모델 내려받기, 목록의 모델 이름·용량을 ollama.com과 대조 (이 개발 컨테이너에서 ollama.com·registry.ollama.ai 접속이 막혀 있음)
+
 ## v0.2.0 (2026-11-13, Linux 개발 컨테이너)
 - `cargo test -p pla-core --features fake-engine`: 단위 77 · 통합 11 · 한국어 PDF 1 · 정적 보안 7 · 기타 통과
 - `cargo test -p philosophy-local-ai`: 저장 파일 이름 정화 테스트 통과

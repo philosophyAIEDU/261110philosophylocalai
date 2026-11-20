@@ -118,16 +118,22 @@ fn quality(m: &CatalogModel, p: Purpose) -> f64 {
     m.korean as f64 * wk + m.summarization as f64 * ws + m.reasoning as f64 * wr
 }
 
-pub fn assess(m: &CatalogModel, hw: &HardwareProfile, p: Purpose) -> Assessment {
+/// 예상 실행 메모리로 이 컴퓨터에서 돌아갈 수 있는지 판단한다.
+pub fn fit_for(need_gb: f64, hw: &HardwareProfile) -> Fit {
     let b = budget(hw);
-    let need = m.est_ram_gb;
-    let fit = if need <= b.max_gb * 0.8 {
+    if need_gb <= b.max_gb * 0.8 {
         Fit::Comfortable
-    } else if need <= b.max_gb {
+    } else if need_gb <= b.max_gb {
         Fit::Tight
     } else {
         Fit::TooLarge
-    };
+    }
+}
+
+pub fn assess(m: &CatalogModel, hw: &HardwareProfile, p: Purpose) -> Assessment {
+    let b = budget(hw);
+    let need = m.est_ram_gb;
+    let fit = fit_for(need, hw);
     let accelerated = need <= b.fast_gb;
     let speed = if accelerated {
         // 가속되더라도 아주 큰 모델은 중간 속도로 본다.

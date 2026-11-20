@@ -386,3 +386,29 @@ async fn engine_down_gives_friendly_korean_error() {
     assert!(rt.health().await.unwrap().running);
     env.engine.stop().await;
 }
+
+#[tokio::test]
+async fn user_added_ollama_library_model_pulls_and_chats_but_others_stay_blocked() {
+    let env = setup(&[]).await;
+    env.guard.set_download_consent(true);
+    // 사용자가 '직접 추가'한 이름 (앱은 검사·정리한 이름만 허용 목록에 넣는다)
+    let custom = pla_core::models::normalize_custom_model("ollama run exaone3.5:7.8b").unwrap();
+    let mut allowed = Catalog::builtin().allowed_ids();
+    allowed.push(custom.clone());
+    let rt = OllamaRuntime::new(env.port, env.guard.clone(), allowed);
+    // 추가하지 않은 모델은 여전히 차단 (엔진에 요청조차 가지 않음)
+    let r = rt.pull_model("llama3.2:3b", Box::new(|_| {}), CancellationToken::new()).await;
+    assert!(matches!(r, Err(AppError::Blocked(_))), "{r:?}");
+    assert!(engine_requests(env.port).await.as_array().unwrap().is_empty());
+    // 추가한 모델은 내려받고 대화할 수 있다
+    rt.pull_model(&custom, Box::new(|_| {}), CancellationToken::new()).await.unwrap();
+    assert!(rt.list_models().await.unwrap().iter().any(|m| m.name == custom && !m.is_remote));
+    let out = rt
+        .chat(ChatRequest { model: custom.clone(), messages: vec![ChatMessage::user("안녕")], num_ctx: Some(2048), temperature: None }, Box::new(|_| {}), CancellationToken::new())
+        .await
+        .unwrap();
+    assert!(!out.content.is_empty());
+    // 내려받기 기록(감사 로그)에 남는다
+    assert!(env.guard.audit_log().iter().any(|a| a.allowed && a.detail.contains(&custom)));
+    env.engine.stop().await;
+}

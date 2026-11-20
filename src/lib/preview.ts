@@ -26,7 +26,7 @@ export function installPreviewBackend() {
     engineInstalled: !q.has("missing-engine") && (q.has("app") || q.has("reinstall")),
     engineRunning: !q.has("missing-engine") && !q.has("engine-error") && !q.has("engine-stopped") && (q.has("app") || q.has("reinstall")),
     save_history: true, consent: false, records: [] as { id: string; kind: string; title: string; updated_at: string; msgs: { role: string; content: string; created_at: string }[] }[], cancelled: new Set<string>(),
-    locked: q.has("locked"), has_passcode: q.has("locked") || q.has("pass"), auto_lock: 10, pseudo: true, update_consent: false, include_pre: true,
+    locked: q.has("locked"), has_passcode: q.has("locked") || q.has("pass"), auto_lock: 10, pseudo: true, update_consent: false, include_pre: true, customs: [] as string[],
     notes: [{ id: "n1", student: "학생 A", date: "2026-11-03", content: "진로 고민. 대학원 진학과 취업 사이에서 결정을 어려워함." }, { id: "n2", student: "학생 B", date: "2026-10-28", content: "아르바이트 병행으로 과제 제출이 늦어짐." }],
   };
   const stream = async (jobId: string, text: string) => {
@@ -75,6 +75,15 @@ export function installPreviewBackend() {
     pull_model: async (a) => { for (let i = 1; i <= 25; i++) { if (state.cancelled.has(a.jobId)) throw { code: "cancelled", message: "작업이 취소되었습니다" }; emit("pull-progress", { job_id: a.jobId, progress: { stage: i > 23 ? "내려받은 파일이 올바른지 확인하는 중" : "AI 모델을 내려받는 중", total_bytes: 5.2e9, completed_bytes: Math.min(i, 23) / 23 * 5.2e9, verifying: i > 23, done: false } }); await sleep(Number(q.get("slow") ?? 60)); } state.installed.push(a.name); },
     cancel_job: (a) => { state.cancelled.add(a.jobId); },
     test_model: async () => { await sleep(400); return { reply: "안녕하세요, 교수님. (미리보기 예시)", tokens_per_sec: 30 }; },
+    list_custom_models: () => state.customs,
+    browse_library: () => ({ list_version: "preview", note: "미리보기용 예시 목록입니다.", models: [
+      { model: { id: "exaone3.5:7.8b", display_name: "EXAONE 3.5 7.8B", publisher: "LG AI연구원", download_gb: 4.8, est_ram_gb: 7, license: "EXAONE AI Model License (비상업)", tags: ["한국어"], description: "국내 기업이 만든 한국어 특화 모델." }, fit: "comfortable" },
+      { model: { id: "llama3.2:3b", display_name: "Llama 3.2 3B", publisher: "Meta", download_gb: 2.0, est_ram_gb: 3.5, license: "Llama 3.2 Community License", tags: ["가벼움", "영어 중심"], description: "작고 빠른 모델. 영어 위주입니다." }, fit: "comfortable" },
+      { model: { id: "deepseek-r1:14b", display_name: "DeepSeek-R1 14B", publisher: "DeepSeek", download_gb: 9.0, est_ram_gb: 12.3, license: "MIT", tags: ["추론"], description: "추론형 중형 모델." }, fit: "tight" },
+      { model: { id: "llama3.3:70b", display_name: "Llama 3.3 70B", publisher: "Meta", download_gb: 43, est_ram_gb: 54.8, license: "Llama 3.3 Community License", tags: ["영어 중심"], description: "매우 큰 모델." }, fit: "too_large" },
+    ] }),
+    add_custom_model: (a) => { const n = String(a.name).trim().toLowerCase().replace(/^ollama (run|pull) /, ""); if (!/^[a-z0-9][a-z0-9._-]*(:[a-z0-9][a-z0-9._-]*)?$/.test(n) || /cloud/.test(n)) throw { code: "blocked", message: "ollama.com 공식 목록의 모델 이름만 추가할 수 있습니다 (예: qwen3:8b)" }; const full = n.includes(":") ? n : `${n}:latest`; state.customs = [...new Set([...(state.customs), full])]; return full; },
+    remove_custom_model: (a) => { state.customs = (state.customs).filter((x: string) => x !== a.name); },
     select_model: (a) => { state.selected = a.name; },
     list_models: () => state.installed.map((n) => ({ name: n, size_bytes: 5.2e9, modified_at: "", parameter_size: "8.2B", quantization: "Q4_K_M", is_remote: false })),
     delete_model: (a) => { state.installed = state.installed.filter((n) => n !== a.name); if (state.selected === a.name) state.selected = null; },

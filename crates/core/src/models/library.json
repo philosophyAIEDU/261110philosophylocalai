@@ -1,0 +1,423 @@
+{
+ "list_version": "2026-11-20",
+ "note": "ollama.com 공식 목록에서 자주 쓰이는 모델을 골라 앱에 넣은 목록입니다. 용량은 근사치이며 실제 크기는 내려받기를 시작하면 표시됩니다.",
+ "models": [
+  {
+   "id": "qwen3:0.6b",
+   "display_name": "Qwen 3 0.6B",
+   "publisher": "Alibaba",
+   "download_gb": 0.5,
+   "est_ram_gb": 1.6,
+   "license": "Apache-2.0",
+   "tags": [
+    "한국어",
+    "가벼움"
+   ],
+   "description": "아주 작은 모델. 저사양 컴퓨터에서 간단한 정리용."
+  },
+  {
+   "id": "qwen3:1.7b",
+   "display_name": "Qwen 3 1.7B",
+   "publisher": "Alibaba",
+   "download_gb": 1.4,
+   "est_ram_gb": 2.8,
+   "license": "Apache-2.0",
+   "tags": [
+    "한국어",
+    "가벼움"
+   ],
+   "description": "작고 빠른 모델. 짧은 요약·정리에 알맞습니다."
+  },
+  {
+   "id": "qwen3:32b",
+   "display_name": "Qwen 3 32B",
+   "publisher": "Alibaba",
+   "download_gb": 20,
+   "est_ram_gb": 26.0,
+   "license": "Apache-2.0",
+   "tags": [
+    "한국어",
+    "추론"
+   ],
+   "description": "큰 모델. 메모리가 넉넉한 컴퓨터에서 깊은 분석에 좋습니다."
+  },
+  {
+   "id": "qwen2.5:7b",
+   "display_name": "Qwen 2.5 7B",
+   "publisher": "Alibaba",
+   "download_gb": 4.7,
+   "est_ram_gb": 6.9,
+   "license": "Apache-2.0",
+   "tags": [
+    "한국어"
+   ],
+   "description": "이전 세대 Qwen. 안정적인 범용 모델."
+  },
+  {
+   "id": "qwen2.5:14b",
+   "display_name": "Qwen 2.5 14B",
+   "publisher": "Alibaba",
+   "download_gb": 9.0,
+   "est_ram_gb": 12.2,
+   "license": "Apache-2.0",
+   "tags": [
+    "한국어"
+   ],
+   "description": "이전 세대 Qwen 중형 모델."
+  },
+  {
+   "id": "qwen3-coder:30b",
+   "display_name": "Qwen 3 Coder 30B",
+   "publisher": "Alibaba",
+   "download_gb": 19,
+   "est_ram_gb": 24.8,
+   "license": "Apache-2.0",
+   "tags": [
+    "코딩"
+   ],
+   "description": "코드 작성·수정에 특화된 모델."
+  },
+  {
+   "id": "exaone3.5:2.4b",
+   "display_name": "EXAONE 3.5 2.4B",
+   "publisher": "LG AI연구원",
+   "download_gb": 1.6,
+   "est_ram_gb": 3.0,
+   "license": "EXAONE AI Model License (비상업)",
+   "tags": [
+    "한국어",
+    "가벼움"
+   ],
+   "description": "국내 기업이 만든 한국어 특화 소형 모델."
+  },
+  {
+   "id": "exaone3.5:7.8b",
+   "display_name": "EXAONE 3.5 7.8B",
+   "publisher": "LG AI연구원",
+   "download_gb": 4.8,
+   "est_ram_gb": 7.0,
+   "license": "EXAONE AI Model License (비상업)",
+   "tags": [
+    "한국어"
+   ],
+   "description": "국내 기업이 만든 한국어 특화 모델."
+  },
+  {
+   "id": "exaone3.5:32b",
+   "display_name": "EXAONE 3.5 32B",
+   "publisher": "LG AI연구원",
+   "download_gb": 19,
+   "est_ram_gb": 24.8,
+   "license": "EXAONE AI Model License (비상업)",
+   "tags": [
+    "한국어"
+   ],
+   "description": "한국어 특화 대형 모델. 메모리가 넉넉해야 합니다."
+  },
+  {
+   "id": "exaone-deep:7.8b",
+   "display_name": "EXAONE Deep 7.8B",
+   "publisher": "LG AI연구원",
+   "download_gb": 4.8,
+   "est_ram_gb": 7.0,
+   "license": "EXAONE AI Model License (비상업)",
+   "tags": [
+    "한국어",
+    "추론"
+   ],
+   "description": "단계적으로 생각하는 추론형 한국어 모델."
+  },
+  {
+   "id": "gemma3n:e2b",
+   "display_name": "Gemma 3n E2B",
+   "publisher": "Google",
+   "download_gb": 5.6,
+   "est_ram_gb": 8.0,
+   "license": "Gemma Terms of Use",
+   "tags": [
+    "한국어"
+   ],
+   "description": "노트북 등 일상 기기용으로 설계된 효율형 모델."
+  },
+  {
+   "id": "gemma3n:e4b",
+   "display_name": "Gemma 3n E4B",
+   "publisher": "Google",
+   "download_gb": 7.5,
+   "est_ram_gb": 10.4,
+   "license": "Gemma Terms of Use",
+   "tags": [
+    "한국어"
+   ],
+   "description": "Gemma 3n의 조금 더 큰 버전."
+  },
+  {
+   "id": "llama3.2:1b",
+   "display_name": "Llama 3.2 1B",
+   "publisher": "Meta",
+   "download_gb": 1.3,
+   "est_ram_gb": 2.6,
+   "license": "Llama 3.2 Community License",
+   "tags": [
+    "가벼움",
+    "영어 중심"
+   ],
+   "description": "아주 작은 모델. 영어 위주입니다."
+  },
+  {
+   "id": "llama3.2:3b",
+   "display_name": "Llama 3.2 3B",
+   "publisher": "Meta",
+   "download_gb": 2.0,
+   "est_ram_gb": 3.5,
+   "license": "Llama 3.2 Community License",
+   "tags": [
+    "가벼움",
+    "영어 중심"
+   ],
+   "description": "작고 빠른 모델. 영어 위주입니다."
+  },
+  {
+   "id": "llama3.1:8b",
+   "display_name": "Llama 3.1 8B",
+   "publisher": "Meta",
+   "download_gb": 4.9,
+   "est_ram_gb": 7.1,
+   "license": "Llama 3.1 Community License",
+   "tags": [
+    "영어 중심"
+   ],
+   "description": "널리 쓰이는 범용 모델. 영어 자료에 알맞습니다."
+  },
+  {
+   "id": "llama3.3:70b",
+   "display_name": "Llama 3.3 70B",
+   "publisher": "Meta",
+   "download_gb": 43,
+   "est_ram_gb": 54.8,
+   "license": "Llama 3.3 Community License",
+   "tags": [
+    "영어 중심"
+   ],
+   "description": "매우 큰 모델. 고사양 워크스테이션용입니다."
+  },
+  {
+   "id": "mistral:7b",
+   "display_name": "Mistral 7B",
+   "publisher": "Mistral AI",
+   "download_gb": 4.4,
+   "est_ram_gb": 6.5,
+   "license": "Apache-2.0",
+   "tags": [
+    "영어 중심"
+   ],
+   "description": "가볍고 빠른 범용 모델. 영어·유럽어 위주."
+  },
+  {
+   "id": "mistral-nemo:12b",
+   "display_name": "Mistral NeMo 12B",
+   "publisher": "Mistral AI · NVIDIA",
+   "download_gb": 7.1,
+   "est_ram_gb": 9.9,
+   "license": "Apache-2.0",
+   "tags": [],
+   "description": "긴 글을 다루기 좋은 다국어 모델."
+  },
+  {
+   "id": "mistral-small3.2:24b",
+   "display_name": "Mistral Small 3.2 24B",
+   "publisher": "Mistral AI",
+   "download_gb": 15,
+   "est_ram_gb": 19.8,
+   "license": "Apache-2.0",
+   "tags": [],
+   "description": "중대형 다국어 모델. 지시를 잘 따릅니다."
+  },
+  {
+   "id": "phi4-mini:3.8b",
+   "display_name": "Phi-4 mini 3.8B",
+   "publisher": "Microsoft",
+   "download_gb": 2.5,
+   "est_ram_gb": 4.1,
+   "license": "MIT",
+   "tags": [
+    "가벼움",
+    "영어 중심"
+   ],
+   "description": "작지만 논리·수학에 강한 모델. 영어 위주."
+  },
+  {
+   "id": "phi4:14b",
+   "display_name": "Phi-4 14B",
+   "publisher": "Microsoft",
+   "download_gb": 9.1,
+   "est_ram_gb": 12.4,
+   "license": "MIT",
+   "tags": [
+    "추론",
+    "영어 중심"
+   ],
+   "description": "논리·수학 추론에 강한 중형 모델. 영어 위주."
+  },
+  {
+   "id": "phi4-reasoning:14b",
+   "display_name": "Phi-4 reasoning 14B",
+   "publisher": "Microsoft",
+   "download_gb": 11,
+   "est_ram_gb": 14.8,
+   "license": "MIT",
+   "tags": [
+    "추론",
+    "영어 중심"
+   ],
+   "description": "단계적 추론에 특화된 모델. 영어 위주."
+  },
+  {
+   "id": "deepseek-r1:1.5b",
+   "display_name": "DeepSeek-R1 1.5B",
+   "publisher": "DeepSeek",
+   "download_gb": 1.1,
+   "est_ram_gb": 2.4,
+   "license": "MIT",
+   "tags": [
+    "추론",
+    "가벼움"
+   ],
+   "description": "아주 작은 추론형 모델."
+  },
+  {
+   "id": "deepseek-r1:7b",
+   "display_name": "DeepSeek-R1 7B",
+   "publisher": "DeepSeek",
+   "download_gb": 4.7,
+   "est_ram_gb": 6.9,
+   "license": "MIT",
+   "tags": [
+    "추론"
+   ],
+   "description": "생각 과정을 거쳐 답하는 추론형 모델."
+  },
+  {
+   "id": "deepseek-r1:8b",
+   "display_name": "DeepSeek-R1 8B",
+   "publisher": "DeepSeek",
+   "download_gb": 5.2,
+   "est_ram_gb": 7.5,
+   "license": "MIT",
+   "tags": [
+    "추론"
+   ],
+   "description": "생각 과정을 거쳐 답하는 추론형 모델."
+  },
+  {
+   "id": "deepseek-r1:14b",
+   "display_name": "DeepSeek-R1 14B",
+   "publisher": "DeepSeek",
+   "download_gb": 9.0,
+   "est_ram_gb": 12.2,
+   "license": "MIT",
+   "tags": [
+    "추론"
+   ],
+   "description": "추론형 중형 모델."
+  },
+  {
+   "id": "deepseek-r1:32b",
+   "display_name": "DeepSeek-R1 32B",
+   "publisher": "DeepSeek",
+   "download_gb": 20,
+   "est_ram_gb": 26.0,
+   "license": "MIT",
+   "tags": [
+    "추론"
+   ],
+   "description": "추론형 대형 모델. 메모리가 넉넉해야 합니다."
+  },
+  {
+   "id": "gpt-oss:20b",
+   "display_name": "gpt-oss 20B",
+   "publisher": "OpenAI",
+   "download_gb": 14,
+   "est_ram_gb": 18.5,
+   "license": "Apache-2.0",
+   "tags": [
+    "추론"
+   ],
+   "description": "OpenAI가 공개한 추론형 모델 (로컬 실행판)."
+  },
+  {
+   "id": "granite3.3:2b",
+   "display_name": "Granite 3.3 2B",
+   "publisher": "IBM",
+   "download_gb": 1.5,
+   "est_ram_gb": 2.9,
+   "license": "Apache-2.0",
+   "tags": [
+    "가벼움",
+    "영어 중심"
+   ],
+   "description": "업무 문서용으로 만든 작은 모델. 영어 위주."
+  },
+  {
+   "id": "granite3.3:8b",
+   "display_name": "Granite 3.3 8B",
+   "publisher": "IBM",
+   "download_gb": 4.9,
+   "est_ram_gb": 7.1,
+   "license": "Apache-2.0",
+   "tags": [
+    "영어 중심"
+   ],
+   "description": "업무 문서용 범용 모델. 영어 위주."
+  },
+  {
+   "id": "smollm2:1.7b",
+   "display_name": "SmolLM2 1.7B",
+   "publisher": "Hugging Face",
+   "download_gb": 1.8,
+   "est_ram_gb": 3.2,
+   "license": "Apache-2.0",
+   "tags": [
+    "가벼움",
+    "영어 중심"
+   ],
+   "description": "아주 가벼운 영어 모델."
+  },
+  {
+   "id": "olmo2:7b",
+   "display_name": "OLMo 2 7B",
+   "publisher": "Allen Institute for AI",
+   "download_gb": 4.5,
+   "est_ram_gb": 6.6,
+   "license": "Apache-2.0",
+   "tags": [
+    "영어 중심"
+   ],
+   "description": "학습 데이터까지 공개된 연구용 개방 모델. 영어 위주."
+  },
+  {
+   "id": "olmo2:13b",
+   "display_name": "OLMo 2 13B",
+   "publisher": "Allen Institute for AI",
+   "download_gb": 8.4,
+   "est_ram_gb": 11.5,
+   "license": "Apache-2.0",
+   "tags": [
+    "영어 중심"
+   ],
+   "description": "학습 데이터까지 공개된 연구용 개방 모델. 영어 위주."
+  },
+  {
+   "id": "aya-expanse:8b",
+   "display_name": "Aya Expanse 8B",
+   "publisher": "Cohere",
+   "download_gb": 5.1,
+   "est_ram_gb": 7.4,
+   "license": "CC-BY-NC-4.0 (비상업)",
+   "tags": [
+    "한국어"
+   ],
+   "description": "한국어를 포함한 23개 언어용 다국어 모델."
+  }
+ ]
+}
