@@ -11,7 +11,6 @@
 //! 모든 조각(blob)이 기록된 크기 그대로 있을 때만 "있음"으로 본다. 경로는 카탈로그 이름으로만
 //! 만들고, 링크가 저장소 밖을 가리키면 무시한다.
 use super::InstalledModel;
-use crate::models::Catalog;
 use serde_json::Value;
 use std::path::{Path, PathBuf};
 
@@ -77,14 +76,14 @@ fn complete_size(root: &Path, root_canon: &Path, m: &Value) -> Option<u64> {
     complete_manifest_size(root, root_canon, m)
 }
 
-pub fn discover(root: &Path, catalog: &Catalog) -> Vec<InstalledModel> {
+/// `names`: 앱이 허용한 모델 이름 (내장 목록 + 사용자가 추가한 모델)
+pub fn discover(root: &Path, names: &[String]) -> Vec<InstalledModel> {
     let Ok(root_canon) = std::fs::canonicalize(root) else { return Vec::new() };
-    catalog
-        .allowed_ids()
+    names
         .iter()
         .filter_map(|name| {
             let (model, tag) = name.split_once(':')?;
-            // 카탈로그 이름만 사용하며 저장소 밖의 경로는 허용하지 않는다.
+            // 허용된 이름만 사용하며 저장소 밖의 경로는 허용하지 않는다.
             if [model, tag].iter().any(|s| s.is_empty() || s.contains('/') || s.contains('\\') || s.contains("..")) {
                 return None;
             }
@@ -104,6 +103,7 @@ pub fn discover(root: &Path, catalog: &Catalog) -> Vec<InstalledModel> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::models::Catalog;
     use sha2::{Digest, Sha256};
 
     fn put_blob(root: &Path, data: &[u8]) -> (String, u64) {
@@ -142,7 +142,7 @@ mod tests {
             let root = dir.path();
             let m = manifest(root, br#"{"model_format":"gguf"}"#, b"weights");
             link_v2(root, "gemma3", "4b", m.to_string().as_bytes(), copy);
-            let found = discover(root, &Catalog::builtin());
+            let found = discover(root, &Catalog::builtin().allowed_ids());
             assert_eq!(found.len(), 1, "copy={copy}");
             assert_eq!(found[0].name, "gemma3:4b");
             assert_eq!(found[0].size_bytes, br#"{"model_format":"gguf"}"#.len() as u64 + 7);
@@ -158,7 +158,7 @@ mod tests {
         let list = serde_json::json!({"schemaVersion": 2, "mediaType": MEDIA_TYPE_MANIFEST_LIST,
             "manifests": [{"mediaType": "application/vnd.docker.distribution.manifest.v2+json", "digest": cd, "size": cs}]});
         link_v2(root, "qwen3", "8b", list.to_string().as_bytes(), false);
-        assert_eq!(discover(root, &Catalog::builtin())[0].name, "qwen3:8b");
+        assert_eq!(discover(root, &Catalog::builtin().allowed_ids())[0].name, "qwen3:8b");
     }
 
     #[test]
@@ -169,22 +169,22 @@ mod tests {
         std::fs::create_dir_all(&legacy).unwrap();
         let mut m = manifest(root, b"{}", b"model");
         std::fs::write(legacy.join("4b"), m.to_string()).unwrap();
-        assert_eq!(discover(root, &Catalog::builtin())[0].name, "gemma3:4b");
+        assert_eq!(discover(root, &Catalog::builtin().allowed_ids())[0].name, "gemma3:4b");
         // 덜 받은 조각
         let layer = root.join("blobs").join(format!("sha256-{}", valid_digest(m["layers"][0]["digest"].as_str().unwrap()).unwrap()));
         std::fs::write(&layer, b"part").unwrap();
-        assert!(discover(root, &Catalog::builtin()).is_empty());
+        assert!(discover(root, &Catalog::builtin().allowed_ids()).is_empty());
         std::fs::write(&layer, b"model").unwrap();
         // 원격 모델
         let remote = br#"{"remote_host":"https://example.com"}"#;
         let (rd, rs) = put_blob(root, remote);
         m["config"] = serde_json::json!({"digest": rd, "size": rs});
         std::fs::write(legacy.join("4b"), m.to_string()).unwrap();
-        assert!(discover(root, &Catalog::builtin()).is_empty());
+        assert!(discover(root, &Catalog::builtin().allowed_ids()).is_empty());
         // 경로 탈출 시도
         m["config"]["digest"] = "sha256:../../outside".into();
         std::fs::write(legacy.join("4b"), m.to_string()).unwrap();
-        assert!(discover(root, &Catalog::builtin()).is_empty());
+        assert!(discover(root, &Catalog::builtin().allowed_ids()).is_empty());
     }
 
     #[cfg(unix)]
@@ -198,11 +198,22 @@ mod tests {
         let v2 = root.join("manifests-v2/ollama.com/library/gemma3");
         std::fs::create_dir_all(&v2).unwrap();
         std::os::unix::fs::symlink(outside.path().join("evil"), v2.join("4b")).unwrap();
-        assert!(discover(root, &Catalog::builtin()).is_empty());
+        assert!(discover(root, &Catalog::builtin().allowed_ids()).is_empty());
+    }
+
+    #[test]
+    fn finds_user_added_models() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        let m = manifest(root, b"{}", b"weights");
+        link_v2(root, "exaone3.5", "7.8b", m.to_string().as_bytes(), false);
+        assert!(discover(root, &Catalog::builtin().allowed_ids()).is_empty());
+        let names = vec!["exaone3.5:7.8b".to_string()];
+        assert_eq!(discover(root, &names)[0].name, "exaone3.5:7.8b");
     }
 
     #[test]
     fn missing_store_is_empty() {
-        assert!(discover(Path::new("/nonexistent/pla-models"), &Catalog::builtin()).is_empty());
+        assert!(discover(Path::new("/nonexistent/pla-models"), &Catalog::builtin().allowed_ids()).is_empty());
     }
 }

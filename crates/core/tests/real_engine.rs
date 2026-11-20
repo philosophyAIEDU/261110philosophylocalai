@@ -59,7 +59,7 @@ async fn real_ollama_install_start_local_only_and_cleanup() {
     //      실제 엔진과 앱의 "이미 받은 AI" 확인이 같은 모델을 보는지 검증한다.
     let models = engine.models_dir();
     let fake = make_v2_model(&models, "gemma3", "4b");
-    let found = pla_core::runtime::local_models::discover(&models, &Catalog::builtin());
+    let found = pla_core::runtime::local_models::discover(&models, &Catalog::builtin().allowed_ids());
     assert!(found.iter().any(|m| m.name == "gemma3:4b"), "엔진 없이도 이미 받은 모델을 찾아야 함: {found:?}");
 
     // 3) 실행

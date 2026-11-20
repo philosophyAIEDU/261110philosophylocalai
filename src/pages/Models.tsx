@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Assessment, CatalogModel, HardwareReport, InstalledModel, RecommendationResult, call, errMsg, fitLabel, fmtBytes, speedLabel } from "../lib/api";
 import { Confirm, Empty, ErrorNotice, Icon, Notice, PageHeader } from "../lib/ui";
 import { HardwareSummary, ModelFacts, RecommendationCard, ReasonList } from "../lib/modelcard";
-import { DownloadFlow } from "../lib/download";
+import { DownloadFlow, customModelInfo } from "../lib/download";
 import { PURPOSES } from "./Onboarding";
 import { useApp } from "../App";
 import { EngineRecovery } from "../lib/engine-recovery";
@@ -17,9 +17,25 @@ export default function Models() {
   const [toDelete, setToDelete] = useState<InstalledModel | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showAll, setShowAll] = useState(false);
+  const [customs, setCustoms] = useState<string[]>([]);
+  const [customInput, setCustomInput] = useState("");
+  const [customTarget, setCustomTarget] = useState<string | null>(null);
+  const [customError, setCustomError] = useState<string | null>(null);
 
   const loadInstalled = useCallback(() => { call<InstalledModel[]>("list_models").then(setInstalled).catch((e) => setError(errMsg(e))); }, []);
-  useEffect(() => { loadInstalled(); call<HardwareReport>("detect_hardware").then(setHw).catch(() => {}); }, [loadInstalled]);
+  const loadCustoms = useCallback(() => { call<string[]>("list_custom_models").then(setCustoms).catch(() => {}); }, []);
+  useEffect(() => { loadInstalled(); loadCustoms(); call<HardwareReport>("detect_hardware").then(setHw).catch(() => {}); }, [loadInstalled, loadCustoms]);
+  const addCustom = async () => {
+    setCustomError(null);
+    try {
+      const name = await call<string>("add_custom_model", { name: customInput });
+      setCustomInput(""); loadCustoms(); setTarget(null); setCustomTarget(name);
+    } catch (e) { setCustomError(errMsg(e)); }
+  };
+  const removeCustom = async (name: string) => {
+    try { await call("remove_custom_model", { name }); if (customTarget === name) setCustomTarget(null); loadCustoms(); } catch (e) { setCustomError(errMsg(e)); }
+  };
+  const ramGB = hw ? Math.round(hw.profile.total_ram / 1024 ** 3) : null;
   useEffect(() => { if (hw) call<RecommendationResult>("recommend_models", { purpose }).then(setRecs).catch((e) => setError(errMsg(e))); }, [hw, purpose]);
 
   const isInstalled = (id: string) => installed.some((m) => m.name === id);
@@ -64,7 +80,7 @@ export default function Models() {
         {!recs ? <div className="card text-muted">컴퓨터 사양을 확인하는 중…</div> : recs.recommendations.length === 0 ? <Notice tone="warn">{recs.explanation}</Notice> : (
           <>
             <div className={`grid gap-4 ${recs.recommendations.length === 3 ? "md:grid-cols-3" : "md:grid-cols-2"}`}>
-              {recs.recommendations.map((r) => <RecommendationCard key={r.assessment.model.id} rec={r} installed={isInstalled(r.assessment.model.id)} selected={target?.id === r.assessment.model.id} onSelect={() => setTarget(r.assessment.model)} />)}
+              {recs.recommendations.map((r) => <RecommendationCard key={r.assessment.model.id} rec={r} installed={isInstalled(r.assessment.model.id)} selected={target?.id === r.assessment.model.id} onSelect={() => { setCustomTarget(null); setTarget(r.assessment.model); }} />)}
             </div>
             <p className="mt-3 text-[13px] text-muted">{recs.explanation} 품질 표시는 개발팀의 예상치이며 측정으로 검증한 값이 아닙니다.</p>
           </>
@@ -81,6 +97,45 @@ export default function Models() {
           {isInstalled(target.id) && status.engine.installed ? <Notice tone="ok">이미 설치된 AI입니다. 위 목록에서 ‘이 AI 사용하기’를 눌러 바꿀 수 있습니다.</Notice> : <DownloadFlow key={target.id} model={target} doneLabel="완료" onDone={() => { setTarget(null); loadInstalled(); }} />}
         </section>
       )}
+
+      <section className="card">
+        <h2 className="h2 mb-1">ollama.com의 다른 AI 직접 추가하기</h2>
+        <p className="mb-3 text-[13.5px] text-muted">추천 목록에 없는 AI도 <b className="text-text">ollama.com 공식 모델 목록</b>(ollama.com/library)에 있으면 이름으로 추가해 이 컴퓨터에서 쓸 수 있습니다. 예: <code>qwen3:8b</code>, <code>exaone3.5:7.8b</code>, <code>llama3.2:3b</code></p>
+        <div className="flex flex-wrap gap-2">
+          <input className="input min-w-[220px] flex-1" value={customInput} onChange={(e) => setCustomInput(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && customInput.trim()) void addCustom(); }}
+            placeholder="모델 이름:크기 (예: qwen3:8b)" aria-label="추가할 모델 이름" spellCheck={false} autoCapitalize="off" />
+          <button className="btn-primary" disabled={!customInput.trim()} onClick={addCustom}><Icon name="plus" className="h-4 w-4" /> 추가</button>
+        </div>
+        <ErrorNotice error={customError} onDismiss={() => setCustomError(null)} />
+        <Notice tone="warn" title="직접 추가하기 전에 확인해 주세요">
+          <ul className="mt-1 list-disc space-y-0.5 pl-5">
+            <li><b>컴퓨터 성능:</b> 앱이 미리 확인하지 못합니다. {ramGB ? <>이 컴퓨터의 메모리는 약 <b>{ramGB}GB</b>입니다. </> : null}ollama.com에 표시된 모델 파일 크기가 메모리의 절반을 넘으면 매우 느리거나 실행되지 않을 수 있습니다.</li>
+            <li><b>라이선스:</b> 모델마다 사용 조건이 다릅니다. ollama.com 모델 페이지에서 확인해 주세요.</li>
+            <li><b>보안:</b> ollama.com 공식 목록의 모델만 추가할 수 있습니다. 다른 사이트의 모델이나 클라우드(원격) 모델은 막혀 있어, 추가한 모델도 이 컴퓨터 안에서만 실행됩니다.</li>
+            <li>추천 목록의 AI와 달리 한국어 실력·답변 품질은 개발팀이 확인하지 않았습니다.</li>
+          </ul>
+        </Notice>
+        {customs.length > 0 && (
+          <ul className="mt-3 space-y-2">
+            {customs.map((n) => (
+              <li key={n} className={`flex flex-wrap items-center gap-3 rounded-xl border px-4 py-2.5 ${customTarget === n ? "border-purple bg-purple-soft" : "border-border"}`}>
+                <span className="min-w-0 flex-1 font-semibold">{n} <span className="text-[12px] font-normal text-muted">직접 추가</span></span>
+                {isInstalled(n) ? <span className="chip bg-ok-soft text-ok">설치됨</span> : <button className="btn-ghost btn-sm" onClick={() => { setTarget(null); setCustomTarget(n); }}><Icon name="download" className="h-4 w-4" /> 내려받기</button>}
+                <button className="btn-ghost btn-sm" onClick={() => removeCustom(n)} title="목록에서만 빼며, 이미 받은 모델 파일은 위 ‘설치된 AI’에서 삭제합니다">목록에서 빼기</button>
+              </li>
+            ))}
+          </ul>
+        )}
+        {customTarget && (
+          <div className="mt-4 rounded-xl border border-border p-4">
+            <div className="mb-3 flex items-start justify-between gap-3">
+              <div><div className="font-bold">{customTarget}</div><div className="text-[12.5px] text-muted">ollama.com/library/{customTarget.split(":")[0]}</div></div>
+              <button className="p-1 text-muted hover:text-text" aria-label="닫기" onClick={() => setCustomTarget(null)}><Icon name="x" /></button>
+            </div>
+            <DownloadFlow key={customTarget} custom model={customModelInfo(customTarget)} doneLabel="완료" onDone={() => { setCustomTarget(null); loadInstalled(); }} />
+          </div>
+        )}
+      </section>
 
       <section className="card">
         <button className="flex w-full items-center justify-between text-left" onClick={() => setShowAll((v) => !v)} aria-expanded={showAll}>

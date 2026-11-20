@@ -1,6 +1,8 @@
 //! Model Recommendation Layer — 모델 카탈로그와 추천 엔진.
 pub mod recommend;
 
+use crate::error::{AppError, AppResult};
+use crate::security::netguard::is_cloud_model_name;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -52,10 +54,78 @@ impl Catalog {
     }
 }
 
+/// 사용자가 직접 추가할 수 있는 모델 수 상한
+pub const MAX_CUSTOM_MODELS: usize = 30;
+
+fn valid_part(s: &str) -> bool {
+    (1..=80).contains(&s.len())
+        && s.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b"._-".contains(&b))
+        && s.as_bytes()[0].is_ascii_alphanumeric()
+        && !s.contains("..")
+}
+
+/// 사용자가 입력한 모델 이름을 검사하고 `모델:태그` 형태로 바꾼다.
+///
+/// - ollama.com 공식 라이브러리 모델만 허용한다 (`qwen3:8b`, `exaone3.5:7.8b` 등).
+///   사용자 이름공간(`user/model`), 다른 저장소 주소(`hf.co/...`), 클라우드 모델(`-cloud`)은 거부한다.
+///   → 엔진이 공식 모델 저장소(registry.ollama.ai) 외의 곳에 접속하지 않게 하기 위함.
+/// - ollama.com 페이지에서 복사한 `ollama run qwen3:8b`, `https://ollama.com/library/qwen3:8b`도 받아 준다.
+/// - 태그가 없으면 `latest`를 붙인다.
+pub fn normalize_custom_model(input: &str) -> AppResult<String> {
+    let mut s = input.trim().to_ascii_lowercase();
+    for prefix in ["ollama run ", "ollama pull "] {
+        if let Some(rest) = s.strip_prefix(prefix) {
+            s = rest.trim().to_string();
+        }
+    }
+    for prefix in ["https://ollama.com/library/", "http://ollama.com/library/", "ollama.com/library/", "https://www.ollama.com/library/"] {
+        if let Some(rest) = s.strip_prefix(prefix) {
+            s = rest.trim_end_matches('/').to_string();
+        }
+    }
+    let bad = || AppError::Blocked("ollama.com 공식 목록의 모델 이름만 추가할 수 있습니다 (예: qwen3:8b)".into());
+    if s.contains('/') || s.contains('\\') || s.contains("://") || s.contains('@') || s.chars().any(|c| c.is_whitespace()) {
+        return Err(bad());
+    }
+    let (model, tag) = match s.split_once(':') {
+        Some((m, t)) => (m.to_string(), t.to_string()),
+        None => (s.clone(), "latest".to_string()),
+    };
+    if !valid_part(&model) || !valid_part(&tag) {
+        return Err(bad());
+    }
+    let name = format!("{model}:{tag}");
+    if is_cloud_model_name(&name) || tag.contains("cloud") {
+        return Err(AppError::Blocked("클라우드 모델은 이 컴퓨터에서 실행되지 않으므로 추가할 수 없습니다".into()));
+    }
+    Ok(name)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::security::netguard::is_cloud_model_name;
+
+    #[test]
+    fn custom_model_names_are_normalized_and_restricted() {
+        for (input, want) in [
+            ("qwen3:8b", "qwen3:8b"),
+            ("  Qwen3:8B ", "qwen3:8b"),
+            ("llama3.2", "llama3.2:latest"),
+            ("ollama run exaone3.5:7.8b", "exaone3.5:7.8b"),
+            ("ollama pull mistral-small3.2:24b", "mistral-small3.2:24b"),
+            ("https://ollama.com/library/gemma3:12b-it-qat", "gemma3:12b-it-qat"),
+            ("ollama.com/library/phi4/", "phi4:latest"),
+        ] {
+            assert_eq!(normalize_custom_model(input).unwrap(), want, "{input}");
+        }
+        for bad in [
+            "", ":8b", "qwen3:", "user/model:1b", "hf.co/bartowski/x:q4", "https://evil.example/m:1",
+            "gpt-oss:120b-cloud", "deepseek-v3.1:671b-cloud", "kimi-k2:cloud", "m:..", "../x:1", "-x:1",
+            "qwen3:8b; rm", "a b:1", "qwen3:8b@sha256", "모델:1", &"a".repeat(81),
+        ] {
+            assert!(normalize_custom_model(bad).is_err(), "{bad:?} 는 거부되어야 함");
+        }
+    }
 
     #[test]
     fn builtin_catalog_is_valid() {

@@ -98,7 +98,33 @@ impl AppState {
 
     pub(crate) async fn runtime(&self) -> AppResult<OllamaRuntime> {
         let port = self.engine.start().await?;
-        Ok(OllamaRuntime::new(port, self.guard.clone(), self.catalog.allowed_ids()))
+        Ok(OllamaRuntime::new(port, self.guard.clone(), self.allowed_models()))
+    }
+
+    /// 사용자가 직접 추가한 모델 (ollama.com 공식 라이브러리 이름만, 추가할 때 검사함)
+    pub(crate) fn custom_models(&self) -> Vec<String> {
+        self.store
+            .get_setting("custom_models")
+            .ok()
+            .flatten()
+            .and_then(|v| serde_json::from_str::<Vec<String>>(&v).ok())
+            .unwrap_or_default()
+            .into_iter()
+            // 저장된 값도 다시 검사한다 (설정 파일이 바뀌었을 경우 대비).
+            .filter_map(|n| pla_core::models::normalize_custom_model(&n).ok().filter(|v| *v == n))
+            .take(pla_core::models::MAX_CUSTOM_MODELS)
+            .collect()
+    }
+
+    /// 내려받기·사용이 허용된 모델: 앱 내장 목록 + 사용자가 추가한 모델
+    pub(crate) fn allowed_models(&self) -> Vec<String> {
+        let mut ids = self.catalog.allowed_ids();
+        for n in self.custom_models() {
+            if !ids.contains(&n) {
+                ids.push(n);
+            }
+        }
+        ids
     }
 
     pub(crate) fn selected_model(&self) -> AppResult<String> {
@@ -269,8 +295,8 @@ async fn list_models(state: State<'_, AppState>) -> AppResult<Vec<InstalledModel
     // 그래야 이미 받은 AI를 다시 내려받으라고 묻지 않는다.
     let on_disk = || {
         let dir = state.engine.models_dir();
-        let catalog = state.catalog.clone();
-        tauri::async_runtime::spawn_blocking(move || pla_core::runtime::local_models::discover(&dir, &catalog))
+        let names = state.allowed_models();
+        tauri::async_runtime::spawn_blocking(move || pla_core::runtime::local_models::discover(&dir, &names))
     };
     if !state.engine.is_installed() {
         return on_disk().await.map_err(|_| E::Other("기존 AI 파일을 확인하지 못했습니다".into()));
@@ -286,15 +312,19 @@ async fn list_models(state: State<'_, AppState>) -> AppResult<Vec<InstalledModel
 
 #[tauri::command]
 async fn pull_model(app: AppHandle, state: State<'_, AppState>, job_id: String, name: String) -> AppResult<()> {
-    let model = state.catalog.get(&name).ok_or_else(|| E::Blocked("앱에 등록된 로컬 모델만 내려받을 수 있습니다".into()))?;
+    // 내장 목록의 모델은 알려진 용량으로, 직접 추가한 모델은 용량을 미리 알 수 없으므로 최소 여유 공간으로 확인한다.
+    let need_gb = match state.catalog.get(&name) {
+        Some(model) => model.download_gb * 1.1 + 2.0,
+        None if state.custom_models().contains(&name) => CUSTOM_MODEL_MIN_FREE_GB,
+        None => return Err(E::Blocked("앱에 등록된 로컬 모델만 내려받을 수 있습니다".into())),
+    };
     let rt = state.runtime().await?;
     if rt.list_models().await?.iter().any(|m| m.name == name && !m.is_remote) {
         return Ok(());
     }
-    // 저장 공간 확인 (다운로드 용량 + 여유 2GB)
     let models_dir = state.engine.models_dir();
     std::fs::create_dir_all(&models_dir)?;
-    check_free_space(&models_dir, ((model.download_gb * 1.1 + 2.0) * 1e9) as u64)?;
+    check_free_space(&models_dir, (need_gb * 1e9) as u64)?;
     let cancel = state.register_job(&job_id);
     let jid = job_id.clone();
     let res = rt
@@ -307,7 +337,47 @@ async fn pull_model(app: AppHandle, state: State<'_, AppState>, job_id: String, 
         )
         .await;
     state.finish_job(&job_id);
-    res
+    res?;
+    // 받은 모델이 실제로 이 컴퓨터에서 실행되는 모델인지 다시 확인한다 (원격 모델이면 지운다).
+    if rt.list_models().await?.iter().any(|m| m.name == name && m.is_remote) {
+        let _ = rt.delete_model(&name).await;
+        return Err(E::Blocked("이 모델은 인터넷 너머에서 실행되는 원격 모델이라 지웠습니다. 이 컴퓨터에서 실행되는 모델만 사용할 수 있습니다".into()));
+    }
+    Ok(())
+}
+
+/// 직접 추가한 모델을 내려받을 때 필요한 최소 여유 공간 (GB). 실제 용량은 내려받기 시작 후 표시된다.
+const CUSTOM_MODEL_MIN_FREE_GB: f64 = 6.0;
+
+/// ollama.com 공식 라이브러리의 모델을 '직접 추가한 모델' 목록에 넣는다. 이름을 검사해 정리된 이름을 돌려준다.
+/// (이 명령은 내려받지 않는다. 내려받기는 사용자가 동의한 뒤 pull_model로 한다.)
+#[tauri::command]
+fn add_custom_model(state: State<'_, AppState>, name: String) -> AppResult<String> {
+    let name = pla_core::models::normalize_custom_model(&name)?;
+    if state.catalog.get(&name).is_some() {
+        return Ok(name);
+    }
+    let mut list = state.custom_models();
+    if !list.contains(&name) {
+        if list.len() >= pla_core::models::MAX_CUSTOM_MODELS {
+            return Err(E::Other(format!("직접 추가한 모델은 {}개까지 둘 수 있습니다. 쓰지 않는 모델을 목록에서 빼 주세요", pla_core::models::MAX_CUSTOM_MODELS)));
+        }
+        list.push(name.clone());
+        state.store.set_setting("custom_models", &serde_json::to_string(&list).map_err(|e| E::Other(e.to_string()))?)?;
+    }
+    Ok(name)
+}
+
+/// '직접 추가한 모델' 목록에서 뺀다. (이미 받은 모델 파일은 '삭제'로 따로 지운다)
+#[tauri::command]
+fn remove_custom_model(state: State<'_, AppState>, name: String) -> AppResult<()> {
+    let list: Vec<String> = state.custom_models().into_iter().filter(|n| *n != name).collect();
+    state.store.set_setting("custom_models", &serde_json::to_string(&list).map_err(|e| E::Other(e.to_string()))?)
+}
+
+#[tauri::command]
+fn list_custom_models(state: State<'_, AppState>) -> Vec<String> {
+    state.custom_models()
 }
 
 #[tauri::command]
@@ -364,7 +434,7 @@ async fn verify_local(state: State<'_, AppState>) -> AppResult<LocalOnlyReport> 
     let Some(port) = state.engine.port().await else {
         return Ok(LocalOnlyReport { details: vec!["AI 엔진이 실행 중이 아닙니다.".into()], ..Default::default() });
     };
-    let rt = OllamaRuntime::new(port, state.guard.clone(), state.catalog.allowed_ids());
+    let rt = OllamaRuntime::new(port, state.guard.clone(), state.allowed_models());
     let model = state.store.get_setting("selected_model")?.filter(|s| !s.is_empty());
     Ok(verify_local_only(&rt, port, model.as_deref()).await)
 }
@@ -815,6 +885,9 @@ pub fn run() {
             start_engine,
             list_models,
             pull_model,
+            add_custom_model,
+            remove_custom_model,
+            list_custom_models,
             cancel_job,
             delete_model,
             test_model,

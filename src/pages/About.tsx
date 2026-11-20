@@ -13,7 +13,7 @@ export default function About() {
 
   const parts: { what: string; name: string; detail: string }[] = [
     { what: "AI 실행 엔진", name: `Ollama ${engineVersion}`, detail: "AI 모델을 이 컴퓨터에서 실행해 주는 공개 소프트웨어입니다(MIT 라이선스). 공식 배포처(GitHub)에서 받은 파일만 쓰며, 받을 때 공식 SHA-256 값과 일치하는지 확인합니다. 이 컴퓨터 내부 주소(127.0.0.1)에서만 열리고, Ollama의 클라우드 기능은 꺼 둡니다." },
-    { what: "지금 쓰는 AI 모델", name: current ? `${current.display_name} (${current.id})` : status.selected_model ?? "아직 선택하지 않음", detail: current ? `${current.publisher}에서 공개한 모델입니다. 라이선스: ${current.license}. 모델 파일은 이 컴퓨터의 앱 전용 폴더에 저장되어, 인터넷 없이 실행됩니다.` : "‘내 AI 모델 관리’에서 고를 수 있습니다." },
+    { what: "지금 쓰는 AI 모델", name: current ? `${current.display_name} (${current.id})` : status.selected_model ?? "아직 선택하지 않음", detail: current ? `${current.publisher}에서 공개한 모델입니다. 라이선스: ${current.license}. 모델 파일은 이 컴퓨터의 앱 전용 폴더에 저장되어, 인터넷 없이 실행됩니다.` : status.selected_model ? `교수님이 ollama.com에서 직접 추가한 모델입니다. 라이선스는 ollama.com/library/${status.selected_model.split(":")[0]} 에서 확인해 주세요. 모델 파일은 이 컴퓨터의 앱 전용 폴더에 저장되어, 인터넷 없이 실행됩니다.` : "‘내 AI 모델 관리’에서 고를 수 있습니다." },
     { what: "앱 본체·화면", name: "Tauri 2 (Rust) + React", detail: "Windows·Mac용 데스크톱 앱입니다. 화면은 인터넷에 직접 접속할 수 없도록 막혀 있고, 파일 열기·저장은 교수님이 고른 파일만 사용합니다." },
     { what: "기록 저장", name: "SQLite + XChaCha20-Poly1305 암호화", detail: "대화·분석·상담 기록은 내용 하나하나를 암호화해 이 앱 폴더에만 저장합니다. 암호화 열쇠는 운영체제 보안 저장소(Windows 자격 증명 관리자 / Mac 키체인)에 두고, 앱 잠금 암호(Argon2id)로 한 번 더 잠급니다." },
     { what: "인터넷 사용", name: "내려받을 때만", detail: "AI 실행 엔진·AI 모델을 받을 때(교수님 동의 후)와 ‘앱 업데이트’를 누를 때만 GitHub·Ollama 공식 저장소에 접속합니다. 문서·질문·대화·기록은 어디로도 전송하지 않습니다." },

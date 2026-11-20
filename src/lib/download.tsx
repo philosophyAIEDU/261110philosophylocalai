@@ -7,7 +7,13 @@ import { useApp } from "../App";
 
 type Phase = "idle" | "engine" | "starting" | "model" | "testing" | "done" | "error";
 
-export function DownloadFlow({ model, onDone, doneLabel = "AI 사용 시작하기" }: { model: CatalogModel; onDone: () => void; doneLabel?: string }) {
+/** 직접 추가한 ollama.com 모델을 내려받기 흐름에 넘길 때 쓰는 최소 정보 (용량·라이선스는 미리 알 수 없음) */
+export function customModelInfo(id: string): CatalogModel {
+  return { id, family: id.split(":")[0], publisher: "ollama.com", display_name: id, params_b: 0, quantization: "", download_gb: 0, est_ram_gb: 0, context_k: 0,
+    license: "", license_url: "", korean: 0, summarization: 0, reasoning: 0, thinking: false, description: "" };
+}
+
+export function DownloadFlow({ model, onDone, doneLabel = "AI 사용 시작하기", custom = false }: { model: CatalogModel; onDone: () => void; doneLabel?: string; custom?: boolean }) {
   const { status, refresh } = useApp();
   const [consent, setConsent] = useState(status.download_consent);
   const [phase, setPhase] = useState<Phase>("idle");
@@ -122,10 +128,12 @@ export function DownloadFlow({ model, onDone, doneLabel = "AI 사용 시작하�
           <div className="rounded-xl bg-surface-2 px-4 py-3 text-[14px]">
             <div className="mb-1 font-bold">내려받기 안내</div>
             <ul className="list-disc space-y-0.5 pl-5 text-muted">
-              <li>{alreadyInstalled ? "내려받을 항목: AI 실행 엔진(Ollama)만" : <>내려받는 용량: 약 <b className="text-text">{model.download_gb.toFixed(1)}GB</b>{!status.engine.installed && " + AI 실행 엔진(Ollama)"}</>}</li>
+              <li>{alreadyInstalled ? "내려받을 항목: AI 실행 엔진(Ollama)만" : custom ? <>내려받는 용량: <b className="text-text">내려받기를 시작하면 표시됩니다</b>{!status.engine.installed && " (+ AI 실행 엔진(Ollama))"}</> : <>내려받는 용량: 약 <b className="text-text">{model.download_gb.toFixed(1)}GB</b>{!status.engine.installed && " + AI 실행 엔진(Ollama)"}</>}</li>
               <li>인터넷은 <b className="text-text">AI 실행 엔진과 AI 모델 파일을 내려받을 때만</b> 사용합니다.</li>
               <li>교수님의 문서, 질문, 대화 내용은 <b className="text-text">어디로도 전송되지 않습니다.</b></li>
-              <li>라이선스: {model.license} ({model.publisher})</li>
+              {custom
+                ? <li>라이선스: 모델마다 다릅니다. <b className="text-text">ollama.com/library/{model.family}</b> 페이지에서 확인해 주세요.</li>
+                : <li>라이선스: {model.license} ({model.publisher})</li>}
             </ul>
           </div>
           {!status.engine.installed && !status.engine.installable && (
