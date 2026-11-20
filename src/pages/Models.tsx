@@ -22,14 +22,13 @@ export default function Models() {
   const [customTarget, setCustomTarget] = useState<string | null>(null);
   const [customError, setCustomError] = useState<string | null>(null);
   const [library, setLibrary] = useState<LibraryView | null>(null);
-  const [showLibrary, setShowLibrary] = useState(false);
   const [libTag, setLibTag] = useState("전체");
   const [hideTooLarge, setHideTooLarge] = useState(true);
 
   const loadInstalled = useCallback(() => { call<InstalledModel[]>("list_models").then(setInstalled).catch((e) => setError(errMsg(e))); }, []);
   const loadCustoms = useCallback(() => { call<string[]>("list_custom_models").then(setCustoms).catch(() => {}); }, []);
   useEffect(() => { loadInstalled(); loadCustoms(); call<HardwareReport>("detect_hardware").then(setHw).catch(() => {}); }, [loadInstalled, loadCustoms]);
-  useEffect(() => { if (showLibrary && hw && !library) call<LibraryView>("browse_library").then(setLibrary).catch((e) => setCustomError(errMsg(e))); }, [showLibrary, hw, library]);
+  useEffect(() => { if (hw && !library) call<LibraryView>("browse_library").then(setLibrary).catch((e) => setCustomError(errMsg(e))); }, [hw, library]);
   const addCustom = async (picked?: string) => {
     setCustomError(null);
     try {
@@ -106,21 +105,9 @@ export default function Models() {
       )}
 
       <section className="card">
-        <h2 className="h2 mb-1">ollama.com의 다른 AI 직접 추가하기</h2>
-        <p className="mb-3 text-[13.5px] text-muted">추천 목록에 없는 AI도 <b className="text-text">ollama.com 공식 모델 목록</b>(ollama.com/library)에 있으면 이름으로 추가해 이 컴퓨터에서 쓸 수 있습니다. 예: <code>qwen3:8b</code>, <code>exaone3.5:7.8b</code>, <code>llama3.2:3b</code></p>
-        <div className="flex flex-wrap gap-2">
-          <input className="input min-w-[220px] flex-1" value={customInput} onChange={(e) => setCustomInput(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && customInput.trim()) void addCustom(); }}
-            placeholder="모델 이름:크기 (예: qwen3:8b)" aria-label="추가할 모델 이름" spellCheck={false} autoCapitalize="off" />
-          <button className="btn-primary" disabled={!customInput.trim()} onClick={() => addCustom()}><Icon name="plus" className="h-4 w-4" /> 추가</button>
-        </div>
-        <ErrorNotice error={customError} onDismiss={() => setCustomError(null)} />
-
-        <div className="mt-3 rounded-xl border border-border">
-          <button className="flex w-full items-center justify-between px-4 py-3 text-left" onClick={() => setShowLibrary((v) => !v)} aria-expanded={showLibrary}>
-            <span className="font-bold">이름을 몰라도 괜찮아요 — 목록에서 고르기</span><span className="text-[13px] text-muted">{showLibrary ? "접기" : "펼치기"}</span>
-          </button>
-          {showLibrary && (
-            <div className="border-t border-border px-4 py-3">
+        <h2 className="h2 mb-1">더 많은 AI 둘러보기 (ollama.com)</h2>
+        <p className="mb-3 text-[13.5px] text-muted">추천 목록 말고도 <b className="text-text">ollama.com 공식 모델 목록</b>에 있는 AI를 골라 이 컴퓨터에서 쓸 수 있습니다. 마음에 드는 AI의 <b className="text-text">‘추가하고 내려받기’</b>를 누르세요.</p>
+        <div>
               {!library ? <div className="text-muted">목록을 준비하는 중…</div> : (() => {
                 const tags = ["전체", ...Array.from(new Set(library.models.flatMap((e) => e.model.tags)))];
                 const rows = library.models
@@ -159,17 +146,26 @@ export default function Models() {
                         })}
                       </ul>
                     )}
-                    <p className="mt-3 text-[12.5px] text-muted">{library.note} (목록 기준일 {library.list_version}) 이 목록은 앱에 들어 있어 인터넷을 쓰지 않으며, 앱을 업데이트하면 새 모델이 추가됩니다. 목록에 없는 최신 모델은 ollama.com/library 에서 이름을 확인해 위 칸에 넣어 주세요.</p>
+                    <p className="mt-3 text-[12.5px] text-muted">{library.note} (목록 기준일 {library.list_version}) 이 목록은 앱에 들어 있어 인터넷을 쓰지 않으며, 앱을 업데이트하면 새 모델이 추가됩니다.</p>
                   </>
                 );
               })()}
-            </div>
-          )}
         </div>
 
-        <Notice tone="warn" title="직접 추가하기 전에 확인해 주세요">
+        <div className="mt-4 border-t border-border pt-4">
+          <div className="label">목록에 없는 AI 이름으로 추가하기 <span className="font-normal text-muted">(ollama.com/library 에서 이름 확인, 예: qwen3:8b)</span></div>
+          <div className="flex flex-wrap gap-2">
+          <input className="input min-w-[220px] flex-1" value={customInput} onChange={(e) => setCustomInput(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && customInput.trim()) void addCustom(); }}
+            placeholder="모델 이름:크기 (예: qwen3:8b)" aria-label="추가할 모델 이름" spellCheck={false} autoCapitalize="off" />
+          <button className="btn-primary" disabled={!customInput.trim()} onClick={() => addCustom()}><Icon name="plus" className="h-4 w-4" /> 추가</button>
+        </div>
+        <ErrorNotice error={customError} onDismiss={() => setCustomError(null)} />
+
+        </div>
+
+        <Notice tone="warn" title="추가하기 전에 확인해 주세요">
           <ul className="mt-1 list-disc space-y-0.5 pl-5">
-            <li><b>컴퓨터 성능:</b> 앱이 미리 확인하지 못합니다. {ramGB ? <>이 컴퓨터의 메모리는 약 <b>{ramGB}GB</b>입니다. </> : null}ollama.com에 표시된 모델 파일 크기가 메모리의 절반을 넘으면 매우 느리거나 실행되지 않을 수 있습니다.</li>
+            <li><b>컴퓨터 성능:</b> 목록의 ‘실행’ 표시는 예상치이고, 이름으로 직접 넣은 AI는 앱이 미리 확인하지 못합니다. {ramGB ? <>이 컴퓨터의 메모리는 약 <b>{ramGB}GB</b>입니다. </> : null}ollama.com에 표시된 모델 파일 크기가 메모리의 절반을 넘으면 매우 느리거나 실행되지 않을 수 있습니다.</li>
             <li><b>라이선스:</b> 모델마다 사용 조건이 다릅니다. ‘비상업’ 표시 모델은 사용 범위가 제한되니 ollama.com 모델 페이지에서 확인해 주세요.</li>
             <li><b>보안:</b> ollama.com 공식 목록의 모델만 추가할 수 있습니다. 다른 사이트의 모델이나 클라우드(원격) 모델은 막혀 있어, 추가한 모델도 이 컴퓨터 안에서만 실행됩니다.</li>
             <li>추천 목록의 AI와 달리 한국어 실력·답변 품질은 개발팀이 확인하지 않았습니다.</li>
