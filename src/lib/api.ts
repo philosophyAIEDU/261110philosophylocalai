@@ -40,6 +40,8 @@ export interface SecurityCheckup {
   save_history: boolean; pseudonymize_students: boolean;
   download_consent: boolean; update_consent: boolean;
 }
+export interface LibraryModel { id: string; display_name: string; publisher: string; download_gb: number; est_ram_gb: number; license: string; tags: string[]; description: string }
+export interface LibraryView { list_version: string; note: string; models: { model: LibraryModel; fit: Fit | null }[] }
 export interface Alias { alias: string; original: string }
 export interface InstallerAsset { name: string; size: number; url: string; sha256: string }
 export interface UpdateInfo {

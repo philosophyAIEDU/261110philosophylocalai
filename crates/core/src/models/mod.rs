@@ -54,6 +54,34 @@ impl Catalog {
     }
 }
 
+/// ollama.com 공식 목록에서 고른 '둘러보기' 모델 (앱 내장, 인터넷에서 불러오지 않음)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LibraryModel {
+    pub id: String,
+    pub display_name: String,
+    pub publisher: String,
+    /// 다운로드 용량 (GB, 근사)
+    pub download_gb: f64,
+    /// 예상 실행 메모리 (GB, 근사)
+    pub est_ram_gb: f64,
+    pub license: String,
+    pub tags: Vec<String>,
+    pub description: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Library {
+    pub list_version: String,
+    pub note: String,
+    pub models: Vec<LibraryModel>,
+}
+
+impl Library {
+    pub fn builtin() -> Self {
+        serde_json::from_str(include_str!("library.json")).expect("내장 모델 목록 JSON 오류")
+    }
+}
+
 /// 사용자가 직접 추가할 수 있는 모델 수 상한
 pub const MAX_CUSTOM_MODELS: usize = 30;
 
@@ -104,6 +132,22 @@ pub fn normalize_custom_model(input: &str) -> AppResult<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn builtin_library_is_safe_and_distinct_from_catalog() {
+        let lib = Library::builtin();
+        let cat = Catalog::builtin();
+        assert!(lib.models.len() >= 20);
+        let mut ids = std::collections::HashSet::new();
+        for m in &lib.models {
+            assert!(ids.insert(m.id.clone()), "중복 {}", m.id);
+            // 목록의 모든 이름은 '직접 추가' 검사를 그대로 통과해야 한다 (클라우드·다른 저장소 없음)
+            assert_eq!(normalize_custom_model(&m.id).unwrap(), m.id);
+            assert!(cat.get(&m.id).is_none(), "추천 목록과 중복: {}", m.id);
+            assert!(m.download_gb > 0.0 && m.est_ram_gb > m.download_gb, "{}", m.id);
+            assert!(!m.license.is_empty() && !m.publisher.is_empty() && !m.description.is_empty());
+        }
+    }
 
     #[test]
     fn custom_model_names_are_normalized_and_restricted() {

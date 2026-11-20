@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Assessment, CatalogModel, HardwareReport, InstalledModel, RecommendationResult, call, errMsg, fitLabel, fmtBytes, speedLabel } from "../lib/api";
+import { Assessment, CatalogModel, HardwareReport, InstalledModel, LibraryView, RecommendationResult, call, errMsg, fitLabel, fmtBytes, speedLabel } from "../lib/api";
 import { Confirm, Empty, ErrorNotice, Icon, Notice, PageHeader } from "../lib/ui";
 import { HardwareSummary, ModelFacts, RecommendationCard, ReasonList } from "../lib/modelcard";
 import { DownloadFlow, customModelInfo } from "../lib/download";
@@ -21,15 +21,22 @@ export default function Models() {
   const [customInput, setCustomInput] = useState("");
   const [customTarget, setCustomTarget] = useState<string | null>(null);
   const [customError, setCustomError] = useState<string | null>(null);
+  const [library, setLibrary] = useState<LibraryView | null>(null);
+  const [showLibrary, setShowLibrary] = useState(false);
+  const [libTag, setLibTag] = useState("전체");
+  const [hideTooLarge, setHideTooLarge] = useState(true);
 
   const loadInstalled = useCallback(() => { call<InstalledModel[]>("list_models").then(setInstalled).catch((e) => setError(errMsg(e))); }, []);
   const loadCustoms = useCallback(() => { call<string[]>("list_custom_models").then(setCustoms).catch(() => {}); }, []);
   useEffect(() => { loadInstalled(); loadCustoms(); call<HardwareReport>("detect_hardware").then(setHw).catch(() => {}); }, [loadInstalled, loadCustoms]);
-  const addCustom = async () => {
+  useEffect(() => { if (showLibrary && hw && !library) call<LibraryView>("browse_library").then(setLibrary).catch((e) => setCustomError(errMsg(e))); }, [showLibrary, hw, library]);
+  const addCustom = async (picked?: string) => {
     setCustomError(null);
     try {
-      const name = await call<string>("add_custom_model", { name: customInput });
-      setCustomInput(""); loadCustoms(); setTarget(null); setCustomTarget(name);
+      const name = await call<string>("add_custom_model", { name: picked ?? customInput });
+      if (!picked) setCustomInput("");
+      loadCustoms(); setTarget(null); setCustomTarget(name);
+      if (picked) document.getElementById("custom-download")?.scrollIntoView?.({ behavior: "smooth", block: "center" });
     } catch (e) { setCustomError(errMsg(e)); }
   };
   const removeCustom = async (name: string) => {
@@ -104,13 +111,66 @@ export default function Models() {
         <div className="flex flex-wrap gap-2">
           <input className="input min-w-[220px] flex-1" value={customInput} onChange={(e) => setCustomInput(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && customInput.trim()) void addCustom(); }}
             placeholder="모델 이름:크기 (예: qwen3:8b)" aria-label="추가할 모델 이름" spellCheck={false} autoCapitalize="off" />
-          <button className="btn-primary" disabled={!customInput.trim()} onClick={addCustom}><Icon name="plus" className="h-4 w-4" /> 추가</button>
+          <button className="btn-primary" disabled={!customInput.trim()} onClick={() => addCustom()}><Icon name="plus" className="h-4 w-4" /> 추가</button>
         </div>
         <ErrorNotice error={customError} onDismiss={() => setCustomError(null)} />
+
+        <div className="mt-3 rounded-xl border border-border">
+          <button className="flex w-full items-center justify-between px-4 py-3 text-left" onClick={() => setShowLibrary((v) => !v)} aria-expanded={showLibrary}>
+            <span className="font-bold">이름을 몰라도 괜찮아요 — 목록에서 고르기</span><span className="text-[13px] text-muted">{showLibrary ? "접기" : "펼치기"}</span>
+          </button>
+          {showLibrary && (
+            <div className="border-t border-border px-4 py-3">
+              {!library ? <div className="text-muted">목록을 준비하는 중…</div> : (() => {
+                const tags = ["전체", ...Array.from(new Set(library.models.flatMap((e) => e.model.tags)))];
+                const rows = library.models
+                  .filter((e) => libTag === "전체" || e.model.tags.includes(libTag))
+                  .filter((e) => !hideTooLarge || e.fit !== "too_large")
+                  .sort((a, b) => a.model.download_gb - b.model.download_gb);
+                return (
+                  <>
+                    <div className="mb-3 flex flex-wrap items-center gap-2">
+                      {tags.map((t) => <button key={t} className={`chip cursor-pointer ${libTag === t ? "bg-purple text-on-primary" : "bg-surface-2 text-text"}`} onClick={() => setLibTag(t)} aria-pressed={libTag === t}>{t}</button>)}
+                      <label className="ml-auto flex cursor-pointer items-center gap-1.5 text-[13px] text-muted"><input type="checkbox" className="h-4 w-4 accent-[var(--purple)]" checked={hideTooLarge} onChange={(e) => setHideTooLarge(e.target.checked)} /> 이 컴퓨터에 너무 큰 AI 숨기기</label>
+                    </div>
+                    {rows.length === 0 ? <div className="text-muted">조건에 맞는 AI가 없습니다.</div> : (
+                      <ul className="space-y-2">
+                        {rows.map(({ model: m, fit }) => {
+                          const added = customs.includes(m.id);
+                          return (
+                            <li key={m.id} className={`flex flex-wrap items-start gap-3 rounded-xl border border-border px-3.5 py-3 ${fit === "too_large" ? "opacity-60" : ""}`}>
+                              <div className="min-w-0 flex-1">
+                                <div className="flex flex-wrap items-baseline gap-x-2"><span className="font-bold">{m.display_name}</span><code className="text-[12px] text-muted">{m.id}</code></div>
+                                <p className="text-[13.5px]">{m.description}</p>
+                                <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-[12.5px] text-muted tabular-nums">
+                                  <span>약 {m.download_gb < 1 ? `${Math.round(m.download_gb * 1000)}MB` : `${m.download_gb}GB`}</span><span>{m.publisher}</span>
+                                  <span className={/비상업/.test(m.license) ? "text-warn" : ""}>{m.license}</span>
+                                  {m.tags.map((t) => <span key={t}>#{t}</span>)}
+                                </div>
+                              </div>
+                              <div className="flex flex-col items-end gap-1.5">
+                                {fit && <span className={`chip ${fit === "comfortable" ? "bg-ok-soft text-ok" : fit === "tight" ? "bg-warn-soft text-warn" : "bg-surface-2 text-muted"}`}>{fitLabel[fit]}</span>}
+                                {isInstalled(m.id) ? <span className="chip bg-ok-soft text-ok">설치됨</span>
+                                  : fit === "too_large" ? null
+                                  : <button className="btn-ghost btn-sm" onClick={() => addCustom(m.id)}><Icon name={added ? "download" : "plus"} className="h-4 w-4" /> {added ? "내려받기" : "추가하고 내려받기"}</button>}
+                              </div>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    )}
+                    <p className="mt-3 text-[12.5px] text-muted">{library.note} (목록 기준일 {library.list_version}) 이 목록은 앱에 들어 있어 인터넷을 쓰지 않으며, 앱을 업데이트하면 새 모델이 추가됩니다. 목록에 없는 최신 모델은 ollama.com/library 에서 이름을 확인해 위 칸에 넣어 주세요.</p>
+                  </>
+                );
+              })()}
+            </div>
+          )}
+        </div>
+
         <Notice tone="warn" title="직접 추가하기 전에 확인해 주세요">
           <ul className="mt-1 list-disc space-y-0.5 pl-5">
             <li><b>컴퓨터 성능:</b> 앱이 미리 확인하지 못합니다. {ramGB ? <>이 컴퓨터의 메모리는 약 <b>{ramGB}GB</b>입니다. </> : null}ollama.com에 표시된 모델 파일 크기가 메모리의 절반을 넘으면 매우 느리거나 실행되지 않을 수 있습니다.</li>
-            <li><b>라이선스:</b> 모델마다 사용 조건이 다릅니다. ollama.com 모델 페이지에서 확인해 주세요.</li>
+            <li><b>라이선스:</b> 모델마다 사용 조건이 다릅니다. ‘비상업’ 표시 모델은 사용 범위가 제한되니 ollama.com 모델 페이지에서 확인해 주세요.</li>
             <li><b>보안:</b> ollama.com 공식 목록의 모델만 추가할 수 있습니다. 다른 사이트의 모델이나 클라우드(원격) 모델은 막혀 있어, 추가한 모델도 이 컴퓨터 안에서만 실행됩니다.</li>
             <li>추천 목록의 AI와 달리 한국어 실력·답변 품질은 개발팀이 확인하지 않았습니다.</li>
           </ul>
@@ -127,7 +187,7 @@ export default function Models() {
           </ul>
         )}
         {customTarget && (
-          <div className="mt-4 rounded-xl border border-border p-4">
+          <div id="custom-download" className="mt-4 rounded-xl border border-border p-4">
             <div className="mb-3 flex items-start justify-between gap-3">
               <div><div className="font-bold">{customTarget}</div><div className="text-[12.5px] text-muted">ollama.com/library/{customTarget.split(":")[0]}</div></div>
               <button className="p-1 text-muted hover:text-text" aria-label="닫기" onClick={() => setCustomTarget(null)}><Icon name="x" /></button>

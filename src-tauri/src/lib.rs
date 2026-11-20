@@ -375,6 +375,32 @@ fn remove_custom_model(state: State<'_, AppState>, name: String) -> AppResult<()
     state.store.set_setting("custom_models", &serde_json::to_string(&list).map_err(|e| E::Other(e.to_string()))?)
 }
 
+#[derive(Serialize)]
+struct LibraryEntry {
+    model: pla_core::models::LibraryModel,
+    /// 이 컴퓨터 사양 기준 예상 (알 수 없으면 None)
+    fit: Option<recommend::Fit>,
+}
+
+#[derive(Serialize)]
+struct LibraryView {
+    list_version: String,
+    note: String,
+    models: Vec<LibraryEntry>,
+}
+
+/// ollama.com 공식 목록에서 고른 모델 둘러보기 (앱 내장 목록 — 인터넷을 쓰지 않는다)
+#[tauri::command]
+fn browse_library(state: State<'_, AppState>) -> LibraryView {
+    let lib = pla_core::models::Library::builtin();
+    let hw = state.hardware.lock().unwrap().clone();
+    LibraryView {
+        list_version: lib.list_version,
+        note: lib.note,
+        models: lib.models.into_iter().map(|m| LibraryEntry { fit: hw.as_ref().map(|h| recommend::fit_for(m.est_ram_gb, h)), model: m }).collect(),
+    }
+}
+
 #[tauri::command]
 fn list_custom_models(state: State<'_, AppState>) -> Vec<String> {
     state.custom_models()
@@ -888,6 +914,7 @@ pub fn run() {
             add_custom_model,
             remove_custom_model,
             list_custom_models,
+            browse_library,
             cancel_job,
             delete_model,
             test_model,
