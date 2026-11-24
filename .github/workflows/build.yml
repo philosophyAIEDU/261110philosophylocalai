@@ -4,7 +4,9 @@ on:
   push:
     branches: ["**"]
     tags: ["v*"]
+    paths-ignore: ["**.md", "docs/**", "site/**", "LICENSE", "netlify.toml"]
   pull_request:
+    paths-ignore: ["**.md", "docs/**", "site/**", "LICENSE", "netlify.toml"]
   workflow_dispatch:
     inputs:
       release_tag:
@@ -31,8 +33,11 @@ jobs:
       - name: 오프라인·연결 감사 보안 테스트
         run: sudo -E env "PATH=$PATH" bash scripts/security-tests.sh
 
+  # 설치 파일 빌드는 버전 태그(v*)나 수동 실행일 때만 한다.
+  # 평소 push에는 테스트만 돌려 GitHub Actions 저장 공간(무료 0.5GB)을 쓰지 않는다.
   bundle:
     needs: test-linux
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
     strategy:
       fail-fast: false
       matrix:
@@ -65,10 +70,12 @@ jobs:
             target/release/bundle/nsis/*.exe
             target/universal-apple-darwin/release/bundle/dmg/*.dmg
           if-no-files-found: error
+          # 설치 파일은 Releases에 올라가므로 Actions 보관은 하루면 충분하다.
+          retention-days: 1
 
   release:
-    # 태그·수동 요청·엔진 복구 브랜치: 검증과 두 운영체제 빌드 성공 후 시험판 게시
-    if: startsWith(github.ref, 'refs/tags/v') || inputs.release_tag != '' || github.ref == 'refs/heads/fix/engine-download-416'
+    # 태그·수동 요청: 검증과 두 운영체제 빌드 성공 후 시험판 게시
+    if: startsWith(github.ref, 'refs/tags/v') || inputs.release_tag != ''
     needs: bundle
     runs-on: ubuntu-24.04
     permissions:
@@ -86,7 +93,6 @@ jobs:
           printf '%s\n' "${files[@]}"
           [ "${#files[@]}" -ge 2 ] || { echo "설치 파일이 부족합니다"; exit 1; }
           TAG="${{ inputs.release_tag }}"
-          if [ -z "$TAG" ] && [ "$GITHUB_REF_NAME" = "fix/engine-download-416" ]; then TAG="v0.2.3"; fi
           [ -n "$TAG" ] || TAG="$GITHUB_REF_NAME"
           [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]] || { echo "태그 형식 오류: $TAG"; exit 1; }
           notes="docs/RELEASE_NOTES_${TAG}.md"
